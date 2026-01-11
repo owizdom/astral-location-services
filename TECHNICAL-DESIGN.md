@@ -4,9 +4,9 @@
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  Developer Application                                    │
+│  Developer Application                                   │
 │  - Collects user location                                │
-│  - Calls Astral SDK                                       │
+│  - Calls Astral SDK                                      │
 └────────────────────────┬─────────────────────────────────┘
                          │
                          ▼
@@ -19,7 +19,7 @@
                          ▼
 ┌──────────────────────────────────────────────────────────┐
 │  Astral API (api.astral.global)                          │
-│                                                           │
+│                                                          │
 │  /locations/*     → Indexer Service (existing)           │
 │  /compute/*       → Compute Service (new)                │
 └──────┬───────────────────────────────────┬───────────────┘

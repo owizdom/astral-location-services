@@ -1,53 +1,53 @@
-# Quickstart: Build a Location-Gated NFT in 10 Minutes
+# Quickstart: Build a Location-Gated NFT
 
-Build your first location-based smart contract. In this guide, you'll create an NFT that can only be minted by people physically near the Eiffel Tower.
+<aside>
+<img src="/icons/science_yellow.svg" alt="/icons/science_yellow.svg" width="40px" />
+
+**Note:** This is a conceptual sketch to demonstrate the flow of Astral Location Services. Code samples are illustrative and not production-ready. We're building this MVP now and would love your feedback!
+
+</aside>
+
+Build your first location-based smart contract. In this guide, you'll create an NFT that can only be minted by people physically at the Eiffel Tower — verified with Astral location proofs.
 
 ## What You'll Learn
 
-- Create location attestations
-- Run geospatial computations
-- Integrate results into smart contracts via EAS resolvers
-- Use local operations (Turf.js) vs verifiable operations (Astral)
+- Collect [location stamps](https://docs.astral.global/location-proofs/plugins/) — evidence to corroborate a location claim — from mobile devices
+- Submit location proofs to Astral Location Services for verification
+- Gate smart contract execution based on verified location + geospatial policy
+- Use EAS resolvers for atomic location-gated actions
 
 ## Prerequisites
 
 ```bash
-npm install @astral-protocol/sdk @turf/turf ethers
+npm install @decentralized-geo/astral-sdk @turf/turf ethers
 ```
 
 You'll need:
-- A wallet with testnet ETH (Base Sepolia)
+
+- A wallet with some imaginary testnet ETH (this isn’t built yet!)
 - Basic knowledge of TypeScript and Solidity
 - 10 minutes
 
 ---
 
-## Step 1: Set Up the SDK
+## Step 1: Set Up the Canonical Location
 
-```typescript
-import { AstralSDK } from '@astral-protocol/sdk';
+First, create a permanent, signed location attestation for the Eiffel Tower that everyone can reference.
+
+```tsx
+import { AstralSDK } from '@decentralized-geo/astral-sdk';
 import { ethers } from 'ethers';
 
 // Connect your wallet
-const provider = new ethers.JsonRpcProvider('https://sepolia.base.org');
+const provider = new ethers.JsonRpcProvider('<https://sepolia.imaginary-eth.org>');
 const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
 // Initialize Astral SDK
 const sdk = new AstralSDK({
   signer: wallet,
-  chainId: 84532  // Base Sepolia
+  chainId: 84532  // Imaginary Sepolia
 });
 
-console.log('SDK initialized!');
-```
-
----
-
-## Step 2: Create the Eiffel Tower Location
-
-First, create a canonical location attestation for the Eiffel Tower that everyone can reference.
-
-```typescript
 // Define the Eiffel Tower as a point
 const eiffelTowerLocation = {
   type: 'Point',
@@ -65,184 +65,136 @@ const eiffelTower = await sdk.location.create(eiffelTowerLocation, {
 });
 
 console.log('Eiffel Tower UID:', eiffelTower.uid);
-// Save this UID - everyone can use it to reference this location
+// Save this UID - it's a permanent reference to this location
+
 ```
 
-**What just happened?**
-- You created a signed attestation of the Eiffel Tower's location
-- It's stored onchain on Base Sepolia
-- You got back a UID (unique identifier) - a permanent reference to this location
-- Anyone can now reference this location by UID instead of coordinates
+**What happened:** You created a signed attestation stored onchain. Anyone can now reference the Eiffel Tower by UID instead of hardcoding coordinates.
 
 ---
 
-## Step 3: Give Users Instant Feedback (Local Operation)
+## Step 2: User Experience - Show Real-Time Distance
 
-When a user opens your app, show them how close they are to the Eiffel Tower using **Turf.js** (instant, local, no cost).
+When a user opens your app, give them instant feedback using **Turf.js** (client-side, unverified, free).
 
-```typescript
+```tsx
 import * as turf from '@turf/turf';
 
-// User's GPS location (from browser/mobile)
-const userLocation = {
+// User's current location (from navigator.geolocation or mobile SDK)
+const userCoords = {
   type: 'Point',
-  coordinates: [2.2951, 48.8580]  // Slightly different coords
+  coordinates: [2.2951, 48.8580]  // Unverified GPS reading
 };
 
 // Calculate distance locally (instant)
 const distanceKm = turf.distance(
   eiffelTowerLocation,
-  userLocation,
+  userCoords,
   { units: 'kilometers' }
 );
 
 console.log(`You are ${distanceKm.toFixed(2)}km from the Eiffel Tower`);
 
-// Show user real-time feedback
+// Show user feedback
 if (distanceKm > 0.5) {
   alert(`Keep going! ${distanceKm.toFixed(2)}km to go.`);
 } else {
-  alert('You're close enough! Claim your NFT.');
+  alert('You're close! Start collecting location stamps to claim your NFT.');
 }
+
 ```
 
-**Why use Turf here?**
-- Instant feedback (no network call)
-- Free (client-side computation)
-- Great for UX (show distance in real-time)
+**Why Turf?** Instant, free, great for UX. But you can't trust it for minting — the user could spoof GPS. 
 
-But you can't trust this for minting - the user could fake their GPS. That's where Astral comes in.
+That's where location proofs come in.
 
 ---
 
-## Step 4: Create Verifiable Proof (Astral Operation)
+## Step 3: Collect Location Stamps
 
-When the user wants to mint, create a **verifiable proof** using Astral.
+When ready to claim, the user collects **location stamps** — corroborative evidence from multiple proof-of-location systems. [Stacking evidence makes location proofs harder to forge](https://collective.flashbots.net/t/towards-stronger-location-proofs/5323).
 
-```typescript
-// First, attest to the user's location
-const userLocationAttestation = await sdk.location.create(userLocation, {
-  submitOnchain: false  // Keep offchain for now (cheaper)
+```tsx
+// Collect location stamps from device plugins
+const locationStamps = await sdk.stamps.collect({
+  plugins: [
+    'gps-timeseries',      // Multiple GPS readings over time
+    'accelerometer',       // Movement patterns
+    'nfc-eiffel-tower'     // NFC tag scan at physical location
+  ],
+  duration: 30000  // Collect for 30 seconds
 });
 
-console.log('User location attested:', userLocationAttestation.uid);
+console.log('Location stamps collected:', locationStamps);
+// {
+//   'gps-timeseries': { readings: [...], confidence: 0.92 },
+//   'accelerometer': { patterns: [...], confidence: 0.88 },
+//   'nfc-eiffel-tower': { tagId: '0xabc...', timestamp: 1234567890 }
+// }
 
-// Now compute: is user within 500m of Eiffel Tower?
-const proximityProof = await sdk.compute.within(
-  userLocationAttestation.uid,
-  eiffelTower.uid,
-  500,  // 500 meters
+```
+
+**What are location stamps?**
+
+- GPS time series: Multiple readings show movement/stability
+- Accelerometer: Detects if phone is actually moving around
+- NFC/QR scan: Physical proof-of-presence at the location
+
+These stamps **corroborate** the location claim. Diverse stamps from different systems create stronger location proofs.
+
+---
+
+## Step 4: Submit to Astral for Verification + Computation
+
+Send the location stamps to Astral Location Services. The service:
+
+1. **Verifies the location proof** (analyzes stamps to see how well they corroborate the claim)
+2. **Computes the geospatial policy** (is user within 500m of Eiffel Tower?)
+3. **Signs a policy attestation** if both checks pass
+
+```tsx
+// Submit location claim with stamps
+const locationClaim = await sdk.location.createWithProof({
+  coordinates: userCoords.coordinates,
+  stamps: locationStamps
+});
+
+console.log('Location claim submitted:', locationClaim.uid);
+
+// Compute proximity policy WITH automatic EAS submission
+const result = await sdk.compute.within(
+  locationClaim.uid,      // User's verified location
+  eiffelTower.uid,        // Canonical Eiffel Tower location
+  500,                    // 500 meters radius
   {
-    submitOnchain: false  // Get signature, submit manually later
+    submitOnchain: true,          // Auto-submit to EAS
+    schema: RESOLVER_SCHEMA_UID,  // Your resolver schema (defined below)
+    recipient: wallet.address     // Who gets the NFT
   }
 );
 
-console.log('Proximity proof:', proximityProof);
-// {
-//   uid: "0xabc123...",
-//   result: true,
-//   distance: 72.4,  // actual distance in meters
-//   signature: "0x...",
-//   attestation: { ... }
-// }
-```
+// Behind the scenes:
+// 1. Astral analyzes location stamps → verifies authenticity
+// 2. Astral computes distance to Eiffel Tower
+// 3. Astral signs policy attestation: "User was within 500m at time T"
+// 4. SDK submits attestation to EAS
+// 5. EAS calls your resolver contract
+// 6. Resolver mints NFT if policy passed
 
-**What just happened?**
-- You created a location attestation for the user (signed proof: "user was here")
-- Astral computed the distance (server-side, verifiable)
-- You got back a **signed policy attestation** with the result
-- The signature proves Astral computed this result (not the user)
-
----
-
-## Step 5: Simple Contract (Manual Verification)
-
-Here's the simple approach - verify the signature in your contract:
-
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
-
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-
-contract EiffelTowerNFT is ERC721 {
-    address public astralSigner = 0x...; // Astral's known signer address
-    uint256 public nextTokenId = 1;
-
-    mapping(address => bool) public hasMinted;
-
-    constructor() ERC721("Eiffel Tower Visitor", "EIFFEL") {}
-
-    function mint(
-        bytes32 policyAttestationUID,
-        bool isNearby,
-        uint256 distance,
-        bytes memory signature
-    ) public {
-        require(!hasMinted[msg.sender], "Already minted");
-        require(isNearby, "Not close enough to Eiffel Tower");
-        require(distance <= 500, "Must be within 500m");
-
-        // Verify signature from Astral
-        bytes32 messageHash = keccak256(abi.encodePacked(
-            policyAttestationUID,
-            isNearby,
-            distance
-        ));
-        bytes32 ethSignedHash = keccak256(abi.encodePacked(
-            "\x19Ethereum Signed Message:\n32",
-            messageHash
-        ));
-
-        address signer = recoverSigner(ethSignedHash, signature);
-        require(signer == astralSigner, "Invalid signature");
-
-        // Mint NFT
-        hasMinted[msg.sender] = true;
-        _mint(msg.sender, nextTokenId++);
-    }
-
-    function recoverSigner(bytes32 hash, bytes memory sig)
-        internal pure returns (address) {
-        // Signature verification logic
-        (uint8 v, bytes32 r, bytes32 s) = splitSignature(sig);
-        return ecrecover(hash, v, r, s);
-    }
-
-    function splitSignature(bytes memory sig)
-        internal pure returns (uint8, bytes32, bytes32) {
-        require(sig.length == 65);
-        bytes32 r;
-        bytes32 s;
-        uint8 v;
-        assembly {
-            r := mload(add(sig, 32))
-            s := mload(add(sig, 64))
-            v := byte(0, mload(add(sig, 96)))
-        }
-        return (v, r, s);
-    }
-}
-```
-
-**Call from frontend:**
-```typescript
-const tx = await eiffelNFT.mint(
-  proximityProof.uid,
-  proximityProof.result,
-  proximityProof.distance,
-  proximityProof.signature
-);
-
-await tx.wait();
+console.log('Policy attestation created:', result.uid);
 console.log('NFT minted! 🎉');
+
 ```
+
+**Key insight:** The service does **both** location proof verification (checking stamps) and geospatial computation (proximity check). The signed result proves both happened correctly. These processes can be unbundled.
+
+**Offchain flexibility:** You could also call `submitOnchain: false` to get a signed offchain location proof or policy attestation, or in ZK proofs later. The signature proves Astral verified everything — no need to submit to EAS immediately.
 
 ---
 
-## Step 6: Better Approach (EAS Resolver)
+## Step 5: The Smart Contract (EAS Resolver)
 
-Instead of manual signature verification, use an **EAS resolver** - cleaner and more composable:
+Your resolver contract gates NFT minting based on the policy attestation.
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -251,37 +203,47 @@ pragma solidity ^0.8.0;
 import "@ethereum-attestation-service/eas-contracts/contracts/resolver/SchemaResolver.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-contract EiffelTowerResolver is SchemaResolver, ERC721 {
-    address public astralSigner = 0x...;
-    bytes32 public eiffelTowerUID = 0x...;  // From step 2
+contract EiffelTowerNFT is SchemaResolver, ERC721 {
+    address public astralSigner;        // Astral's known signer address
+    bytes32 public eiffelTowerUID;      // Canonical location UID
     uint256 public nextTokenId = 1;
 
     mapping(address => bool) public hasMinted;
 
-    constructor(IEAS eas)
+    constructor(
+        IEAS eas,
+        address _astralSigner,
+        bytes32 _eiffelTowerUID
+    )
         SchemaResolver(eas)
         ERC721("Eiffel Tower Visitor", "EIFFEL")
-    {}
+    {
+        astralSigner = _astralSigner;
+        eiffelTowerUID = _eiffelTowerUID;
+    }
 
     function onAttest(
         Attestation calldata attestation,
         uint256 /*value*/
     ) internal override returns (bool) {
-        // 1. Verify from Astral
+        // 1. Verify attestation is from Astral
         require(attestation.attester == astralSigner, "Not from Astral");
 
         // 2. Decode the policy result
-        (bool isNearby, uint256 distance, bytes32 checkedLocation) =
-            abi.decode(attestation.data, (bool, uint256, bytes32));
+        (
+            bool policyPassed,
+            uint256 distance,
+            bytes32 checkedLocationUID
+        ) = abi.decode(attestation.data, (bool, uint256, bytes32));
 
-        // 3. Verify they checked the right location
-        require(checkedLocation == eiffelTowerUID, "Wrong location");
+        // 3. Verify correct location was checked
+        require(checkedLocationUID == eiffelTowerUID, "Wrong location");
 
-        // 4. Check proximity
-        require(isNearby, "Not close enough");
+        // 4. Verify policy passed (within 500m)
+        require(policyPassed, "Not close enough to Eiffel Tower");
         require(distance <= 500, "Must be within 500m");
 
-        // 5. Ensure user hasn't already minted
+        // 5. Ensure user hasn't already claimed
         require(!hasMinted[attestation.recipient], "Already minted");
 
         // 6. Mint NFT atomically
@@ -296,145 +258,124 @@ contract EiffelTowerResolver is SchemaResolver, ERC721 {
         return false;  // Don't allow revocation
     }
 }
+
 ```
 
 **Deploy and register schema:**
-```typescript
+
+```tsx
 // Deploy resolver
-const Resolver = await ethers.getContractFactory("EiffelTowerResolver");
-const resolver = await Resolver.deploy(EAS_ADDRESS);
+const Resolver = await ethers.getContractFactory("EiffelTowerNFT");
+const resolver = await Resolver.deploy(
+  EAS_ADDRESS,
+  ASTRAL_SIGNER_ADDRESS,
+  eiffelTower.uid
+);
+await resolver.deployed();
 
 // Register schema with EAS
 const schemaRegistry = new SchemaRegistry(SCHEMA_REGISTRY_ADDRESS);
-const schema = "bool isNearby,uint256 distance,bytes32 locationUID";
-const tx = await schemaRegistry.register(schema, resolver.address, true);
+const schema = "bool policyPassed,uint256 distance,bytes32 locationUID";
+
+const tx = await schemaRegistry.register(
+  schema,
+  resolver.address,
+  true  // revocable
+);
 const receipt = await tx.wait();
 
-const schemaUID = receipt.events[0].args.uid;
-console.log('Schema UID:', schemaUID);
-```
+const RESOLVER_SCHEMA_UID = receipt.events[0].args.uid;
+console.log('Schema UID:', RESOLVER_SCHEMA_UID);
+// Use this UID when calling sdk.compute.within() above
 
-**Call from frontend:**
-```typescript
-// Create location proof WITH automatic onchain submission
-const result = await sdk.compute.within(
-  userLocationAttestation.uid,
-  eiffelTower.uid,
-  500,
-  {
-    submitOnchain: true,          // SDK submits to EAS
-    schema: schemaUID,             // Your schema (has resolver)
-    recipient: wallet.address      // Who gets the NFT
-  }
-);
-
-// EAS calls your resolver → resolver mints NFT → attestation created
-// User now has NFT + permanent attestation proving they visited!
-
-console.log('NFT minted via resolver! 🎉');
-console.log('Attestation UID:', result.uid);
-```
-
-**Why this is better:**
-- Attestation creation = NFT minting (atomic)
-- Permanent record: "User X visited Eiffel Tower at time Y"
-- Composable: Other contracts can query EAS for visit history
-- Cleaner: No manual signature verification
-
----
-
-## Step 7: Query Visit History
-
-Now that visits are attestations, you can query them:
-
-```typescript
-// Find everyone who visited the Eiffel Tower
-const visits = await sdk.location.query({
-  schema: schemaUID,
-  refUID: eiffelTower.uid  // Attestations referencing Eiffel Tower
-});
-
-console.log(`${visits.length} people have visited!`);
-
-visits.forEach(visit => {
-  console.log(`${visit.recipient} visited at ${new Date(visit.time * 1000)}`);
-});
 ```
 
 ---
 
-## The Full Flow
+## The Complete Flow
 
-```typescript
+```tsx
 import { AstralSDK } from '@astral-protocol/sdk';
 import * as turf from '@turf/turf';
 
-// 1. Initialize
 const sdk = new AstralSDK({ signer: wallet });
 
-// 2. Create canonical location (one time)
+// 1. Create canonical location (one-time setup)
 const landmark = await sdk.location.create(landmarkGeoJSON, {
   submitOnchain: true
 });
 
-// 3. User opens app - show instant feedback
-const distance = turf.distance(userLocation, landmarkLocation);
-console.log(`${distance}km away`);
+// 2. User opens app - instant feedback with Turf
+const distance = turf.distance(userCoords, landmarkGeoJSON);
+console.log(`${distance}km away - keep going!`);
 
-// 4. User claims NFT - create verifiable proof
-const userAttestation = await sdk.location.create(userLocation);
-const proof = await sdk.compute.within(
-  userAttestation.uid,
+// 3. User arrives - collect location stamps
+const stamps = await sdk.stamps.collect({
+  plugins: ['gps-timeseries', 'accelerometer', 'nfc-station']
+});
+
+// 4. Create verified location claim
+const claim = await sdk.location.createWithProof({
+  coordinates: userCoords.coordinates,
+  stamps
+});
+
+// 5. Submit for verification + computation + onchain action
+const result = await sdk.compute.within(
+  claim.uid,
   landmark.uid,
   500,
   {
     submitOnchain: true,
-    schema: RESOLVER_SCHEMA,
+    schema: RESOLVER_SCHEMA_UID,
     recipient: userAddress
   }
 );
 
-// 5. Done! Resolver mints NFT automatically
-console.log('NFT minted!', proof.uid);
+// Done! Astral verified location → computed policy → signed attestation
+//       → EAS called resolver → resolver minted NFT
+console.log('NFT minted!', result.uid);
+
 ```
 
 ---
 
-## Key Takeaways
+## Why This Works
 
-**Turf.js (local) vs Astral (verifiable):**
-- Use **Turf** for UX: instant feedback, real-time updates, free
-- Use **Astral** for verification: signed proofs, onchain integration, trustless
+**Location Proofs:** Multiple stamps corroborate the claim. Astral analyzes them for authenticity (time patterns, sensor consistency, physical tokens). The number and diversity of location stamps depends on the dev requirements — we don’t require any specific proof-of-location systems to be used.
 
-**Location Attestations:**
-- Create once, reference by UID
-- Signed proof: "this location exists/occurred"
-- Permanent and composable
+**Geospatial Policy:** Astral computes the spatial relationship (distance, containment, etc.) using PostGIS. We have plans to decentralize this, perhaps as an AVS.
 
-**Policy Attestations:**
-- Signed result of computation
-- Verifiable by smart contracts
-- Can trigger actions via EAS resolvers
+**Signed Attestation:** Astral's signature proves both verification and computation happened correctly.
 
-**EAS Resolvers:**
-- Attestation creation = business logic execution
-- Atomic operations
-- Permanent records
+**EAS Resolver:** Attestation creation triggers your business logic atomically. Permanent onchain record.
+
+**Offchain Option:** You can also get signed results without submitting onchain—use in apps, ZK proofs, or submit later.
+
+---
+
+## What You Can Build
+
+Now that you understand the pattern, here are some ideas:
+
+**🌍 Local Currencies** - Geogated Uniswap pools (only swap if you're in the region)
+
+**🏛️ Neighborhood DAOs** - Governance tokens only for local residents
+
+**📦 Delivery Verification** - Release escrow when package proves it arrived at the right address
+
+**🎮 Location-Based Games** - Capture territory, geocaching with tokens, AR treasure hunts
+
+**🗳️ Proximity Voting** - Vote weight increases the closer you are to what's being decided
+
+**🎪 Event POAPs** - Prove attendance at conferences, concerts, meetups
+
+See [What You Can Build](https://www.notion.so/astral-protocol/WHAT-YOU-CAN-BUILD.md) for detailed examples with code.
 
 ---
 
 ## Next Steps
 
-**Try these variations:**
-- Change the radius (100m, 1km, etc.)
-- Add multiple landmarks (collect them all!)
-- Time-bound minting (only during certain hours)
-- Require visiting multiple locations
-- Add location proofs (verify GPS authenticity)
+**Questions? Feedback?** We're building this in public and would love to hear from you. Open an issue or reach out!
 
-**Explore more patterns:**
-- [What You Can Build](./WHAT-YOU-CAN-BUILD.md) - More use cases
-- [Technical Design](./TECHNICAL-DESIGN.md) - Architecture deep dive
-- [API Reference](./docs/api-reference.md) - All available operations
-
-**Build something awesome!** Location-based smart contracts are a new primitive. What will you create?
+**Location-based smart contracts open a new design space. What will you create?**
