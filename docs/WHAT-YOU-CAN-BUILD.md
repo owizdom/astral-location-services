@@ -23,8 +23,8 @@ Create neighborhood economies where you must be present to participate. SF resid
 
 ```typescript
 // User in San Francisco
-const myLocation = await sdk.location.create(userGPS);
-const eligibility = await sdk.compute.contains(
+const myLocation = await astral.location.create(userGPS);
+const eligibility = await astral.compute.contains(
   sfBayAreaUID,
   myLocation.uid,
   {
@@ -54,7 +54,7 @@ const noeValleyDAO = new GeogatedDAO({
 });
 
 // Prove you live/work in the neighborhood
-const proof = await sdk.compute.contains(
+const proof = await astral.compute.contains(
   noeValleyPolygonUID,
   myLocationUID
 );
@@ -78,7 +78,7 @@ await noeValleyDAO.vote(proposalId, voteChoice);
 
 ```typescript
 // Prove you're at the Eiffel Tower
-const proof = await sdk.compute.within(
+const proof = await astral.compute.within(
   myLocationUID,
   eiffelTowerUID,
   100  // within 100 meters
@@ -127,7 +127,7 @@ contract DeliveryEscrow {
 
 ```typescript
 // At a conference
-const proof = await sdk.compute.contains(
+const proof = await astral.compute.contains(
   conferenceVenueUID,
   myLocationUID
 );
@@ -173,11 +173,11 @@ function vote(uint proposalId, bytes32 policyAttestationUID) public {
 
 ```typescript
 // List item (seller must be in region)
-const proof = await sdk.compute.contains(regionUID, sellerLocationUID);
+const proof = await astral.compute.contains(regionUID, sellerLocationUID);
 await marketplace.list(itemId, price, proof.uid, proof.signature);
 
 // Buy item (buyer must be nearby seller)
-const proximityProof = await sdk.compute.within(
+const proximityProof = await astral.compute.within(
   buyerLocationUID,
   sellerLocationUID,
   5000  // within 5km
@@ -199,11 +199,11 @@ await marketplace.buy(itemId, proximityProof.uid, proximityProof.signature);
 
 ```typescript
 // Capture territory
-const proof = await sdk.compute.contains(territoryUID, myLocationUID);
+const proof = await astral.compute.contains(territoryUID, myLocationUID);
 await game.capture(territoryId, proof.uid, proof.signature);
 
 // Battle (only if players are nearby)
-const proximityProof = await sdk.compute.distance(
+const proximityProof = await astral.compute.distance(
   player1LocationUID,
   player2LocationUID
 );
@@ -255,7 +255,7 @@ function fileClaim(
 
 ```typescript
 // Verify tree planting at specified location
-const proof = await sdk.compute.contains(
+const proof = await astral.compute.contains(
   conservationZoneUID,
   plantingSiteUID
 );
@@ -291,6 +291,6 @@ Combined with EAS resolver contracts, these primitives unlock an entirely new de
 
 ## Get Started
 
-Check out the [Quickstart Guide](./docs/quickstart.md) to build your first location-based dApp.
+Check out the [Quickstart Guide](./QUICKSTART.md) to build your first location-based dApp.
 
 **Have an idea?** We'd love to hear what you're building. Open an issue or join our community.

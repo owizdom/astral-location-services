@@ -1,73 +1,74 @@
 # Claude Instructions for astral-location-services
 
 ## Project Overview
-This is the **geospatial policy engine** for the Astral Protocol - a hosted service that performs spatial computations and outputs signed EAS attestations for use offchain and onchain.
+
+This is **Astral Location Services** - a verifiable geospatial computation service for Ethereum. It performs spatial computations in a TEE (via EigenCompute) and outputs signed EAS attestations for use offchain and onchain.
+
+## Authoritative Documentation
+
+**SPEC.md is the authoritative technical specification.** Refer to it for:
+- Architecture and system design
+- API endpoints and request/response formats
+- SDK structure and usage
+- Data models (Policy Attestation schemas)
+- Security considerations
+- Deployment model (EigenCompute/TEE)
 
 ## Development Principles
-- **Developer experience first**: This should be delightfully clear and easy to use
-- **Web3 native**: Everything uses EAS attestations as the data model
-- **Geospatial-friendly**: Make spatial concepts accessible to web3 developers
-- **MVP mindset**: Build for learning and iteration, defer complexity (verification, custom policies)
 
-## Architecture Context
-- **Input**: Location attestations (EAS format, referenced by UID or raw geometry)
-- **Processing**: Stateless geospatial computations (distance, containment, etc.)
-- **Output**: Signed EAS attestations containing results (offchain or onchain)
+- **Developer experience first**: Clear, intuitive SDK and API
+- **Web3 native**: EAS attestations as the data model, wallet-based identity
+- **Verifiable computation**: Operations run in TEE via EigenCompute
+- **Complement Turf.js**: Turf for local/UX operations, Astral for verifiable/onchain
+- **MVP mindset**: Build for learning and iteration, defer complexity
 
-## What Exists Already
-- Location Protocol schema (EAS-based, PostGIS-inspired)
-- SDK for Location Protocol
-- Onchain registry (EAS contracts)
-- API indexer (OGC API Features conformant)
-- Location verification/proofs framework (in development)
+## Key Technical Decisions (from SPEC.md)
 
-## Key Constraints
-- Keep aligned with existing Location Protocol schema and infrastructure
-- Changes have consequences (docs, deployments) but we're still v0 - iterate to stronger design
-- No custom stored policies for MVP - simple composable functions only
-- No query integration in policy engine - developers orchestrate separately
+- **Separate service**: Compute service is independent, runs in EigenCompute TEE
+- **Self-contained container**: PostGIS runs inside Docker container for verifiability
+- **Stateless model**: Each request brings all inputs, no persistent state
+- **Per-result-type schemas**: Boolean, Numeric, Geometry attestation schemas
+- **Delegated attestations**: Developer submits onchain, Astral is attester
+- **Phased auth**: No auth for MVP, wallet auth later
 
-## Key Design Decisions (2025-10-17)
+## SDK Namespace
 
-**Architecture:**
-- Separate compute service, shares Postgres with indexer
-- Accessed via unified API (`api.astral.global/compute/*`)
-- Service holds signing keys, returns signed Policy Attestations
+```typescript
+astral.location.*   // Location attestation operations
+astral.compute.*    // Geospatial computation operations
+astral.eas.*        // EAS submission helpers
+```
 
-**SDK Structure:**
-- `sdk.location.*` - Location attestation operations
-- `sdk.compute.*` - Geospatial computation operations
-- Namespaced by domain, not by action type
+## MVP Operations
 
-**Operations First, Predicates Later:**
-- Start with atomic operations (distance, contains, intersects)
-- Compose into predicates/policies later
-- Maps to PostGIS/Turf mental model
+- `distance` - Distance between two geometries (meters)
+- `length` - Length of a line (meters)
+- `area` - Area of a polygon (square meters)
+- `contains` - Is geometry B inside geometry A?
+- `within` - Is point within distance of target?
+- `intersects` - Do geometries overlap?
 
-**Complement Turf.js, Don't Replace:**
-- Turf for local/UX operations (instant feedback, free)
-- Astral for verifiable/onchain operations (signed, trustable)
-- Developers use both in same app
-
-**EAS Resolver Integration:**
-- Resolvers can gate smart contract actions based on policy results
-- Attestation creation = business logic execution (atomic)
-- Enables location-gated smart contracts trivially
-
-**Input Flexibility:**
-- UIDs as primary (canonical location references)
-- Raw GeoJSON as convenience (for prototyping)
-- Service resolves UIDs to geometry from DB
-
-**Naming:**
-- "Policy Attestations" for computation results
-- Aligns with Turf method names where possible
-- "Astral Verifier" for the oracle/signer
+**Units:** Metric only. No conversion options.
 
 ## When Working on This Repo
-1. Refer to GOAL.md for the core vision
-2. Check TECHNICAL-DESIGN.md for architecture details
-3. Read QUICKSTART.md to understand developer perspective
-4. Check existing Location Protocol implementation before designing new schemas
-5. Prioritize clarity over cleverness
-6. Think from the perspective of a dapp developer using this service
+
+1. **Read SPEC.md first** - It's the authoritative technical document
+2. **Check GOAL.md** for vision and core concepts
+3. **Read QUICKSTART.md** to understand developer perspective
+4. **Prioritize clarity over cleverness**
+5. **Think from the perspective of a dapp developer**
+
+## Repository Structure
+
+```
+├── SPEC.md              # Technical specification (authoritative)
+├── README.md            # Project overview
+├── GOAL.md              # Vision and core concepts
+├── QUICKSTART.md        # Developer tutorial
+├── WHAT-YOU-CAN-BUILD.md # Use cases and patterns
+└── CLAUDE.md            # These instructions
+```
+
+## Grant Context
+
+This project is part of the EigenLayer Open Innovation Program. See SPEC.md Appendix for milestone mapping.

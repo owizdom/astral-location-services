@@ -1,89 +1,111 @@
 # Astral Location Services
 
-**PostGIS for Ethereum** - Run geospatial computations that work onchain.
+**Verifiable geospatial computation for Ethereum** - Run spatial operations in a TEE and get signed attestations for onchain use.
 
-Astral Location Services is a geospatial computation oracle that makes location-based smart contracts possible. Perform spatial operations (distance, containment, intersection) and get back signed attestations you can verify onchain.
+Astral Location Services is a geospatial computation oracle that makes location-based smart contracts possible. Perform spatial operations (distance, containment, intersection) and get back signed attestations you can register on EAS. Using EAS resolvers, these policy attestations can be connected to any smart contract.
 
 ## Overview
 
-Built on the [Location Protocol](https://easierdata.org/updates/2025/2025-05-19-location-protocol-spec) and [Ethereum Attestation Service (EAS)](https://attest.org), Astral Location Services provides verifiable geospatial operations for Ethereum. Think of it as a verifiability layer for the incumbent geospatial web - PostGIS, GeoJSON, and Turf.js now work onchain.
+Built on the [Location Protocol](https://easierdata.org/updates/2025/2025-05-19-location-protocol-spec) and [Ethereum Attestation Service (EAS)](https://attest.org), Astral Location Services provides verifiable geospatial operations for Ethereum.
+
+**Key features:**
+- **Verifiable computation** via EigenCompute (TEE environment)
+- **PostGIS-powered** spatial operations (distance, contains, intersects, within, area)
+- **EAS integration** with delegated attestations for onchain use
+- **SDK-first** developer experience
 
 ## Quick Example
 
 ```typescript
-import { AstralSDK } from '@astral-protocol/sdk';
+import { AstralSDK } from '@decentralized-geo/astral-sdk';
 
-const sdk = new AstralSDK({ signer: wallet });
+const astral = new AstralSDK();
 
-// Create a location attestation
-const eiffelTower = await sdk.location.create({
-  type: 'Point',
-  coordinates: [2.2945, 48.8584]
-});
-
-// Check if user is nearby (returns signed attestation)
-const proof = await sdk.compute.within(
+// Check if user is within 500m of landmark
+const result = await astral.compute.within(
   userLocationUID,
-  eiffelTower.uid,
-  500  // 500 meters
+  landmarkUID,
+  500,
+  { schema: RESOLVER_SCHEMA, recipient: userAddress }
 );
 
-// Use in smart contract (EAS resolver)
-// Resolver verifies signature → mints NFT if nearby
+console.log(`Nearby: ${result.result}`);
+
+// Submit onchain (developer pays gas, Astral is attester)
+const tx = await astral.eas.submitDelegated(result.delegatedAttestation);
 ```
 
-See the [Quickstart Guide](./QUICKSTART.md) for a complete walkthrough.
+See the [Quickstart Guide](./docs/QUICKSTART.md) for a complete walkthrough.
 
 ---
 
 ## How It Works
 
-**Location Attestations** are signed spatial records (points, polygons, routes) that live onchain or offchain. Reference them by UID.
+1. **Location Attestations** are signed spatial records (points, polygons, routes) that conform to Location Protocol. Reference them by UID.
 
-**Geospatial Operations** compute relationships between locations: distance, containment, intersection, etc. Just like PostGIS or Turf.js.
+2. **Geospatial Operations** compute relationships between locations: distance, containment, intersection, etc. Operations run in a TEE via EigenCompute.
 
-**Policy Attestations** are signed results of computations. Smart contracts verify these to gate onchain actions by real-world location.
+3. **Policy Attestations** are signed results of computations. Smart contracts verify these to gate onchain actions by real-world location.
 
-**EAS Resolvers** trigger business logic when attestations are created. This makes location-gated contracts trivial - no manual signature verification needed.
+4. **EAS Resolvers** trigger business logic when attestations are created. Location-gated contracts become trivial - no manual signature verification needed.
 
 ## What You Can Build
 
 - **Local currencies** - Geogated token swaps (only trade if you're in the region)
 - **Neighborhood DAOs** - Governance tokens for residents only
 - **Proof-of-visit NFTs** - Collectibles for visiting locations
-- **Delivery verification** - Escrow that releases when package arrives at right place
+- **Delivery verification** - Escrow that releases when package arrives
 - **Location-based games** - Territory control, geocaching with tokens
-- **Proximity voting** - Vote weight based on distance to what you're voting on
+- **Proximity voting** - Vote weight based on distance
 
-See [What You Can Build](./WHAT-YOU-CAN-BUILD.md) for detailed examples with code.
+See [What You Can Build](./docs/WHAT-YOU-CAN-BUILD.md) for detailed examples.
 
 ---
 
 ## Documentation
 
-**Get Started:**
-- [Quickstart Guide](./QUICKSTART.md) - Build a location-gated NFT in 10 minutes
-- [Goal & Vision](./GOAL.md) - What we're building and why
-- [Technical Design](./TECHNICAL-DESIGN.md) - Architecture and implementation details
+| Document | Description |
+|----------|-------------|
+| [SPEC.md](./SPEC.md) | **Technical specification** - Architecture, API, SDK, schemas, security |
+| [QUICKSTART.md](./docs/QUICKSTART.md) | Developer tutorial - Build a location-gated NFT |
+| [GOAL.md](./docs/GOAL.md) | Vision and core concepts |
+| [WHAT-YOU-CAN-BUILD.md](./docs/WHAT-YOU-CAN-BUILD.md) | Use cases and patterns |
 
-**Reference:**
-- [What You Can Build](./WHAT-YOU-CAN-BUILD.md) - Use cases and patterns
-- API Reference *(coming soon)*
-- Schema Documentation *(coming soon)*
+---
+
+## Architecture
+
+```
+Developer App → Astral SDK → Compute Service (EigenCompute TEE) → Policy Attestation
+                                     ↓
+                              PostGIS (in-container)
+```
+
+The compute service runs in EigenCompute's TEE environment with PostGIS inside the container, enabling verifiable geospatial computation.
+
+See [SPEC.md](./SPEC.md) for detailed architecture.
 
 ---
 
 ## Status
 
-This is an MVP (v0) focused on developer experience and validation. We're building in public.
+**Version:** 0.1.0 (MVP)
 
-**Current:** Centralized oracle (trust Astral's signer)
-**Future:** Decentralized verification via AVS, ZK proofs, or TEEs
+This is an MVP focused on developer experience and learning. Building as part of the EigenLayer Open Innovation Program.
 
-**Target:** ETHGlobal (a few weeks) - We want to use this to build location-based dapps ourselves.
+**Trust Model:**
+- Centralized service with known signer running in TEE (EigenCompute)
+- Future: Additional verifiability options (AVS consensus, ZK proofs)
 
 ## Contributing
 
-This project is in active development (v0). Feedback and contributions are welcome!
+This project is in active development. Feedback and contributions welcome!
 
+---
 
+## Links
+
+- [Astral Protocol](https://astral.global)
+- [Location Protocol Spec](https://easierdata.org/updates/2025/2025-05-19-location-protocol-spec)
+- [EigenCompute](https://blog.eigencloud.xyz/eigencloud-brings-verifiable-ai-to-mass-market-with-eigenai-and-eigencompute-launches/)
+- [EAS Documentation](https://docs.attest.org)

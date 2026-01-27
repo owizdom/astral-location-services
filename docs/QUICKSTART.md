@@ -43,7 +43,7 @@ const provider = new ethers.JsonRpcProvider('<https://sepolia.imaginary-eth.org>
 const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
 // Initialize Astral SDK
-const sdk = new AstralSDK({
+const astral = new AstralSDK({
   signer: wallet,
   chainId: 84532  // Imaginary Sepolia
 });
@@ -55,7 +55,7 @@ const eiffelTowerLocation = {
 };
 
 // Create a location attestation
-const eiffelTower = await sdk.location.create(eiffelTowerLocation, {
+const eiffelTower = await astral.location.create(eiffelTowerLocation, {
   submitOnchain: true,
   metadata: {
     name: "Eiffel Tower",
@@ -115,8 +115,8 @@ That's where location proofs come in.
 When ready to claim, the user collects **location stamps** — corroborative evidence from multiple proof-of-location systems. [Stacking evidence makes location proofs harder to forge](https://collective.flashbots.net/t/towards-stronger-location-proofs/5323).
 
 ```tsx
-// Collect location stamps from device plugins
-const locationStamps = await sdk.stamps.collect({
+// Collect location stamps from device plugins (future feature)
+const locationStamps = await astral.stamps.collect({
   plugins: [
     'gps-timeseries',      // Multiple GPS readings over time
     'accelerometer',       // Movement patterns
@@ -153,8 +153,8 @@ Send the location stamps to Astral Location Services. The service:
 3. **Signs a policy attestation** if both checks pass
 
 ```tsx
-// Submit location claim with stamps
-const locationClaim = await sdk.location.createWithProof({
+// Submit location claim with stamps (future feature)
+const locationClaim = await astral.location.createWithProof({
   coordinates: userCoords.coordinates,
   stamps: locationStamps
 });
@@ -162,7 +162,7 @@ const locationClaim = await sdk.location.createWithProof({
 console.log('Location claim submitted:', locationClaim.uid);
 
 // Compute proximity policy WITH automatic EAS submission
-const result = await sdk.compute.within(
+const result = await astral.compute.within(
   locationClaim.uid,      // User's verified location
   eiffelTower.uid,        // Canonical Eiffel Tower location
   500,                    // 500 meters radius
@@ -286,7 +286,7 @@ const receipt = await tx.wait();
 
 const RESOLVER_SCHEMA_UID = receipt.events[0].args.uid;
 console.log('Schema UID:', RESOLVER_SCHEMA_UID);
-// Use this UID when calling sdk.compute.within() above
+// Use this UID when calling astral.compute.within() above
 
 ```
 
@@ -295,13 +295,13 @@ console.log('Schema UID:', RESOLVER_SCHEMA_UID);
 ## The Complete Flow
 
 ```tsx
-import { AstralSDK } from '@astral-protocol/sdk';
+import { AstralSDK } from '@decentralized-geo/astral-sdk';
 import * as turf from '@turf/turf';
 
-const sdk = new AstralSDK({ signer: wallet });
+const astral = new AstralSDK({ signer: wallet });
 
 // 1. Create canonical location (one-time setup)
-const landmark = await sdk.location.create(landmarkGeoJSON, {
+const landmark = await astral.location.create(landmarkGeoJSON, {
   submitOnchain: true
 });
 
@@ -309,19 +309,19 @@ const landmark = await sdk.location.create(landmarkGeoJSON, {
 const distance = turf.distance(userCoords, landmarkGeoJSON);
 console.log(`${distance}km away - keep going!`);
 
-// 3. User arrives - collect location stamps
-const stamps = await sdk.stamps.collect({
+// 3. User arrives - collect location stamps (future feature)
+const stamps = await astral.stamps.collect({
   plugins: ['gps-timeseries', 'accelerometer', 'nfc-station']
 });
 
-// 4. Create verified location claim
-const claim = await sdk.location.createWithProof({
+// 4. Create verified location claim (future feature)
+const claim = await astral.location.createWithProof({
   coordinates: userCoords.coordinates,
   stamps
 });
 
 // 5. Submit for verification + computation + onchain action
-const result = await sdk.compute.within(
+const result = await astral.compute.within(
   claim.uid,
   landmark.uid,
   500,
@@ -370,7 +370,7 @@ Now that you understand the pattern, here are some ideas:
 
 **🎪 Event POAPs** - Prove attendance at conferences, concerts, meetups
 
-See [What You Can Build](https://www.notion.so/astral-protocol/WHAT-YOU-CAN-BUILD.md) for detailed examples with code.
+See [What You Can Build](./WHAT-YOU-CAN-BUILD.md) for detailed examples with code.
 
 ---
 
