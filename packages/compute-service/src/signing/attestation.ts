@@ -1,0 +1,152 @@
+import { SchemaEncoder } from '@ethereum-attestation-service/eas-sdk';
+import { Wallet, keccak256, AbiCoder } from 'ethers';
+import type { DelegatedAttestationResponse, NumericPolicyAttestationData, BooleanPolicyAttestationData } from '../types/index.js';
+import { NUMERIC_POLICY_SCHEMA, BOOLEAN_POLICY_SCHEMA } from './schemas.js';
+
+// EAS contract addresses by chain
+const EAS_CONTRACT_ADDRESSES: Record<number, string> = {
+  84532: '0x4200000000000000000000000000000000000021', // Base Sepolia
+  8453: '0x4200000000000000000000000000000000000021',  // Base Mainnet
+};
+
+// Domain separator constants
+const EAS_DOMAIN_NAME = 'EAS';
+const EAS_DOMAIN_VERSION = '1.0.0';
+const ATTEST_TYPE_HASH = keccak256(
+  Buffer.from('Attest(bytes32 schema,address recipient,uint64 expirationTime,bool revocable,bytes32 refUID,bytes data,uint256 value,uint256 nonce,uint64 deadline)')
+);
+
+let signer: Wallet | null = null;
+let currentChainId = 84532; // Default to Base Sepolia
+let nonce = 0n;
+
+/**
+ * Initialize the signing service with a private key.
+ */
+export function initSigner(privateKey: string, chainId: number = 84532): void {
+  signer = new Wallet(privateKey);
+  currentChainId = chainId;
+  console.log('Attestation signer initialized:', signer.address);
+}
+
+/**
+ * Get the current signer address.
+ */
+export function getSignerAddress(): string {
+  if (!signer) {
+    throw new Error('Signer not initialized');
+  }
+  return signer.address;
+}
+
+/**
+ * Sign a numeric policy attestation (for distance, area, length operations).
+ */
+export async function signNumericAttestation(
+  data: NumericPolicyAttestationData,
+  schemaUid: string,
+  recipient: string
+): Promise<DelegatedAttestationResponse> {
+  if (!signer) {
+    throw new Error('Signer not initialized');
+  }
+
+  const encoder = new SchemaEncoder(NUMERIC_POLICY_SCHEMA);
+  const encodedData = encoder.encodeData([
+    { name: 'result', value: data.result, type: 'uint256' },
+    { name: 'units', value: data.units, type: 'string' },
+    { name: 'inputRefs', value: data.inputRefs, type: 'bytes32[]' },
+    { name: 'timestamp', value: data.timestamp, type: 'uint64' },
+    { name: 'operation', value: data.operation, type: 'string' },
+  ]);
+
+  return signDelegatedAttestation(encodedData, schemaUid, recipient);
+}
+
+/**
+ * Sign a boolean policy attestation (for contains, within, intersects operations).
+ */
+export async function signBooleanAttestation(
+  data: BooleanPolicyAttestationData,
+  schemaUid: string,
+  recipient: string
+): Promise<DelegatedAttestationResponse> {
+  if (!signer) {
+    throw new Error('Signer not initialized');
+  }
+
+  const encoder = new SchemaEncoder(BOOLEAN_POLICY_SCHEMA);
+  const encodedData = encoder.encodeData([
+    { name: 'result', value: data.result, type: 'bool' },
+    { name: 'inputRefs', value: data.inputRefs, type: 'bytes32[]' },
+    { name: 'timestamp', value: data.timestamp, type: 'uint64' },
+    { name: 'operation', value: data.operation, type: 'string' },
+  ]);
+
+  return signDelegatedAttestation(encodedData, schemaUid, recipient);
+}
+
+/**
+ * Create and sign a delegated attestation.
+ */
+async function signDelegatedAttestation(
+  encodedData: string,
+  schemaUid: string,
+  recipient: string
+): Promise<DelegatedAttestationResponse> {
+  if (!signer) {
+    throw new Error('Signer not initialized');
+  }
+
+  const currentNonce = nonce++;
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour from now
+
+  const message = {
+    schema: schemaUid,
+    recipient,
+    expirationTime: 0n, // No expiration
+    revocable: true,
+    refUID: '0x0000000000000000000000000000000000000000000000000000000000000000',
+    data: encodedData,
+    value: 0n,
+    nonce: currentNonce,
+    deadline,
+  };
+
+  // Build EIP-712 typed data
+  const domain = {
+    name: EAS_DOMAIN_NAME,
+    version: EAS_DOMAIN_VERSION,
+    chainId: currentChainId,
+    verifyingContract: EAS_CONTRACT_ADDRESSES[currentChainId],
+  };
+
+  const types = {
+    Attest: [
+      { name: 'schema', type: 'bytes32' },
+      { name: 'recipient', type: 'address' },
+      { name: 'expirationTime', type: 'uint64' },
+      { name: 'revocable', type: 'bool' },
+      { name: 'refUID', type: 'bytes32' },
+      { name: 'data', type: 'bytes' },
+      { name: 'value', type: 'uint256' },
+      { name: 'nonce', type: 'uint256' },
+      { name: 'deadline', type: 'uint64' },
+    ],
+  };
+
+  const signature = await signer.signTypedData(domain, types, message);
+
+  // Split signature into r, s, v
+  const sig = {
+    r: signature.slice(0, 66),
+    s: '0x' + signature.slice(66, 130),
+    v: parseInt(signature.slice(130, 132), 16),
+  };
+
+  return {
+    message,
+    signature: sig,
+    attester: signer.address,
+  };
+}
