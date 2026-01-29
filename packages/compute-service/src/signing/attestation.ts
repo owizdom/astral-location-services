@@ -1,5 +1,5 @@
 import { SchemaEncoder } from '@ethereum-attestation-service/eas-sdk';
-import { Wallet } from 'ethers';
+import { Wallet, HDNodeWallet } from 'ethers';
 import { Mutex } from 'async-mutex';
 import type { SigningResult, NumericPolicyAttestationData, BooleanPolicyAttestationData } from '../types/index.js';
 import { NUMERIC_POLICY_SCHEMA, BOOLEAN_POLICY_SCHEMA } from './schemas.js';
@@ -14,7 +14,7 @@ const EAS_CONTRACT_ADDRESSES: Record<number, string> = {
 const EAS_DOMAIN_NAME = 'EAS';
 const EAS_DOMAIN_VERSION = '1.2.0'; // Must match deployed EAS contract version
 
-let signer: Wallet | null = null;
+let signer: Wallet | HDNodeWallet | null = null;
 let currentChainId = 84532; // Default to Base Sepolia
 let nonce = 0n;
 const nonceMutex = new Mutex();
@@ -47,6 +47,17 @@ export function initSigner(privateKey: string, chainId: number = 84532, starting
   currentChainId = chainId;
   nonce = startingNonce;
   console.log('Attestation signer initialized:', signer.address, 'nonce:', nonce.toString());
+}
+
+/**
+ * Initialize the signing service from a mnemonic phrase.
+ * Used in EigenCompute TEE environment where mnemonic is securely stored.
+ */
+export function initSignerFromMnemonic(mnemonic: string, chainId: number = 84532, startingNonce: bigint = 0n): void {
+  signer = Wallet.fromPhrase(mnemonic);
+  currentChainId = chainId;
+  nonce = startingNonce;
+  console.log('Attestation signer initialized from mnemonic:', signer.address, 'nonce:', nonce.toString());
 }
 
 /**

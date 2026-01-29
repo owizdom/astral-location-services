@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { checkConnection } from './db/pool.js';
-import { initSigner, getSignerAddress } from './signing/attestation.js';
+import { initSigner, initSignerFromMnemonic, getSignerAddress } from './signing/attestation.js';
 import computeRoutes from './routes/index.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { rateLimiter } from './middleware/rate-limit.js';
@@ -54,14 +54,23 @@ app.use(errorHandler);
 
 // Startup
 async function start() {
-  // Initialize signer if private key is provided
+  // Initialize signer - MNEMONIC (production/TEE) takes precedence over SIGNER_PRIVATE_KEY (local/staging)
+  const mnemonic = process.env.MNEMONIC;
   const signerKey = process.env.SIGNER_PRIVATE_KEY;
-  if (signerKey) {
-    const chainId = parseInt(process.env.CHAIN_ID || '84532', 10);
+  const chainId = parseInt(process.env.CHAIN_ID || '84532', 10);
+
+  if (mnemonic) {
+    // Production mode: EigenCompute TEE with encrypted mnemonic
+    initSignerFromMnemonic(mnemonic, chainId);
+    console.log('Mode: Production (TEE)');
+    console.log('Signer address:', getSignerAddress());
+  } else if (signerKey) {
+    // Local/Staging mode: Direct private key
     initSigner(signerKey, chainId);
+    console.log('Mode: Development/Staging');
     console.log('Signer address:', getSignerAddress());
   } else {
-    console.warn('WARNING: SIGNER_PRIVATE_KEY not set. Attestation signing will fail.');
+    console.warn('WARNING: Neither MNEMONIC nor SIGNER_PRIVATE_KEY set. Attestation signing will fail.');
   }
 
   // Check database connection
