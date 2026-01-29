@@ -1,5 +1,5 @@
 import { SchemaEncoder } from '@ethereum-attestation-service/eas-sdk';
-import { Wallet, keccak256, AbiCoder } from 'ethers';
+import { Wallet } from 'ethers';
 import { Mutex } from 'async-mutex';
 import type { SigningResult, NumericPolicyAttestationData, BooleanPolicyAttestationData } from '../types/index.js';
 import { NUMERIC_POLICY_SCHEMA, BOOLEAN_POLICY_SCHEMA } from './schemas.js';
@@ -13,9 +13,6 @@ const EAS_CONTRACT_ADDRESSES: Record<number, string> = {
 // Domain separator constants
 const EAS_DOMAIN_NAME = 'EAS';
 const EAS_DOMAIN_VERSION = '1.2.0'; // Must match deployed EAS contract version
-const ATTEST_TYPE_HASH = keccak256(
-  Buffer.from('Attest(bytes32 schema,address recipient,uint64 expirationTime,bool revocable,bytes32 refUID,bytes data,uint256 value,uint256 nonce,uint64 deadline)')
-);
 
 let signer: Wallet | null = null;
 let currentChainId = 84532; // Default to Base Sepolia
