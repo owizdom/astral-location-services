@@ -25,8 +25,7 @@ const EAS_DOMAIN_VERSION = '1.2.0'; // Must match deployed EAS contract version
 
 let signer: Wallet | HDNodeWallet | null = null;
 let currentChainId = 84532; // Default to Base Sepolia
-let nonce = 0n;
-const nonceMutex = new Mutex();
+let easContract: Contract | null = null;
 
 // Cache for SchemaEncoder instances to avoid recreation per request
 const encoderCache = new Map<string, SchemaEncoder>();
@@ -41,69 +40,67 @@ function getEncoder(schema: string): SchemaEncoder {
 }
 
 /**
- * Get the next nonce in a thread-safe manner.
+ * Get the current nonce from EAS contract.
+ * This ensures nonce is always in sync, even if previous attestations weren't submitted.
  */
-async function getNextNonce(): Promise<bigint> {
-  return nonceMutex.runExclusive(() => nonce++);
+async function getCurrentNonce(): Promise<bigint> {
+  if (!signer || !easContract) {
+    throw new Error('Signer or EAS contract not initialized');
+  }
+  const nonce = await easContract.getNonce(signer.address);
+  return BigInt(nonce);
+}
+
+/**
+ * Initialize EAS contract for nonce queries.
+ */
+function initEASContract(chainId: number): void {
+  const rpcUrl = RPC_URLS[chainId];
+  const easAddress = EAS_CONTRACT_ADDRESSES[chainId];
+
+  if (!rpcUrl || !easAddress) {
+    console.warn(`No RPC URL or EAS address for chain ${chainId}, nonce queries will fail`);
+    return;
+  }
+
+  const provider = new JsonRpcProvider(rpcUrl);
+  easContract = new Contract(easAddress, EAS_ABI, provider);
+  console.log('EAS contract initialized for nonce queries');
 }
 
 /**
  * Initialize the signing service with a private key.
- * Optionally set the starting nonce (useful for syncing with contract state).
  */
-export function initSigner(privateKey: string, chainId: number = 84532, startingNonce: bigint = 0n): void {
+export function initSigner(privateKey: string, chainId: number = 84532): void {
   signer = new Wallet(privateKey);
   currentChainId = chainId;
-  nonce = startingNonce;
-  console.log('Attestation signer initialized:', signer.address, 'nonce:', nonce.toString());
+  initEASContract(chainId);
+  console.log('Attestation signer initialized:', signer.address);
 }
 
 /**
  * Initialize the signing service from a mnemonic phrase.
  * Used in EigenCompute TEE environment where mnemonic is securely stored.
  */
-export function initSignerFromMnemonic(mnemonic: string, chainId: number = 84532, startingNonce: bigint = 0n): void {
+export function initSignerFromMnemonic(mnemonic: string, chainId: number = 84532): void {
   signer = Wallet.fromPhrase(mnemonic);
   currentChainId = chainId;
-  nonce = startingNonce;
-  console.log('Attestation signer initialized from mnemonic:', signer.address, 'nonce:', nonce.toString());
+  initEASContract(chainId);
+  console.log('Attestation signer initialized from mnemonic:', signer.address);
 }
 
 /**
- * Set the nonce to a specific value.
- * Used for syncing with contract state or testing.
+ * @deprecated Use getCurrentNonce() instead - nonce is now queried from EAS on each request
  */
-export function setNonce(newNonce: bigint): void {
-  nonce = newNonce;
+export function setNonce(_newNonce: bigint): void {
+  console.warn('setNonce is deprecated - nonce is now queried from EAS on each request');
 }
 
 /**
- * Sync the nonce from the EAS contract.
- * This ensures the server's nonce matches what EAS expects.
+ * @deprecated Nonce is now queried from EAS on each request
  */
 export async function syncNonceFromEAS(): Promise<void> {
-  if (!signer) {
-    throw new Error('Signer not initialized');
-  }
-
-  const rpcUrl = RPC_URLS[currentChainId];
-  const easAddress = EAS_CONTRACT_ADDRESSES[currentChainId];
-
-  if (!rpcUrl || !easAddress) {
-    console.warn(`No RPC URL or EAS address for chain ${currentChainId}, skipping nonce sync`);
-    return;
-  }
-
-  try {
-    const provider = new JsonRpcProvider(rpcUrl);
-    const eas = new Contract(easAddress, EAS_ABI, provider);
-    const onchainNonce = await eas.getNonce(signer.address);
-    nonce = BigInt(onchainNonce);
-    console.log(`Nonce synced from EAS: ${nonce.toString()}`);
-  } catch (error) {
-    console.error('Failed to sync nonce from EAS:', error);
-    console.warn('Continuing with nonce 0 - attestation submissions may fail');
-  }
+  console.log('syncNonceFromEAS is deprecated - nonce is now queried from EAS on each signing request');
 }
 
 /**
@@ -176,7 +173,7 @@ async function signDelegatedAttestation(
     throw new Error('Signer not initialized');
   }
 
-  const currentNonce = await getNextNonce();
+  const currentNonce = await getCurrentNonce();
   const deadlineTimestamp = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
   const deadline = BigInt(deadlineTimestamp);
 
