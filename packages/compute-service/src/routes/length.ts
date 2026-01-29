@@ -5,6 +5,7 @@ import { signNumericAttestation } from '../signing/attestation.js';
 import { UNITS, SCALE_FACTORS, scaleToUint256 } from '../signing/schemas.js';
 import { Errors } from '../middleware/error-handler.js';
 import { LengthRequestSchema } from '../validation/schemas.js';
+import { getNumericSchemaUid } from '../config/schemas.js';
 import type { NumericComputeResponse } from '../types/index.js';
 
 const router = Router();
@@ -22,7 +23,15 @@ router.post('/', async (req, res, next) => {
       throw Errors.invalidInput(parsed.error.message);
     }
 
-    const { geometry, schema, recipient } = parsed.data;
+    const { geometry, schema: requestSchema, recipient, chainId } = parsed.data;
+
+    // Get schema UID - use provided or fall back to configured default
+    const schema = requestSchema ?? getNumericSchemaUid(chainId);
+    if (!schema) {
+      throw Errors.invalidInput(
+        'schema is required. Either provide a schema UID in the request or configure NUMERIC_SCHEMA_UID environment variable.'
+      );
+    }
 
     const resolved = await resolveInput(geometry);
 

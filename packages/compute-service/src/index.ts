@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { checkConnection } from './db/pool.js';
 import { initSigner, initSignerFromMnemonic, getSignerAddress } from './signing/attestation.js';
+import { initSchemaConfig } from './config/schemas.js';
 import computeRoutes from './routes/index.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { rateLimiter } from './middleware/rate-limit.js';
@@ -72,6 +73,9 @@ async function start() {
   } else {
     console.warn('WARNING: Neither MNEMONIC nor SIGNER_PRIVATE_KEY set. Attestation signing will fail.');
   }
+
+  // Initialize default schema UIDs for the configured chain
+  initSchemaConfig(chainId);
 
   // Check database connection
   const dbConnected = await checkConnection();

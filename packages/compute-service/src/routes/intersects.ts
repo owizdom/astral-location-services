@@ -4,6 +4,7 @@ import { resolveInputs } from '../services/input-resolver.js';
 import { signBooleanAttestation } from '../signing/attestation.js';
 import { Errors } from '../middleware/error-handler.js';
 import { IntersectsRequestSchema } from '../validation/schemas.js';
+import { getBooleanSchemaUid } from '../config/schemas.js';
 import type { BooleanComputeResponse } from '../types/index.js';
 
 const router = Router();
@@ -21,7 +22,15 @@ router.post('/', async (req, res, next) => {
       throw Errors.invalidInput(parsed.error.message);
     }
 
-    const { geometry1, geometry2, schema, recipient } = parsed.data;
+    const { geometry1, geometry2, schema: requestSchema, recipient, chainId } = parsed.data;
+
+    // Get schema UID - use provided or fall back to configured default
+    const schema = requestSchema ?? getBooleanSchemaUid(chainId);
+    if (!schema) {
+      throw Errors.invalidInput(
+        'schema is required. Either provide a schema UID in the request or configure BOOLEAN_SCHEMA_UID environment variable.'
+      );
+    }
 
     const [geom1Resolved, geom2Resolved] = await resolveInputs([geometry1, geometry2]);
 

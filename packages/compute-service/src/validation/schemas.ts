@@ -90,15 +90,17 @@ export const InputSchema = z.union([
 // Common request fields
 export const ChainIdSchema = z.number().int().positive('chainId must be a positive integer');
 export const SchemaUidSchema = z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Invalid schema UID');
+export const OptionalSchemaUidSchema = SchemaUidSchema.optional();
 export const RecipientSchema = z.string()
   .regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid recipient address')
   .optional()
   .default('0x0000000000000000000000000000000000000000');
 
 // Base request schema (common fields across all endpoints)
+// schema is optional - if not provided, the API uses configured defaults
 const BaseRequestSchema = z.object({
   chainId: ChainIdSchema,
-  schema: SchemaUidSchema,
+  schema: OptionalSchemaUidSchema,
   recipient: RecipientSchema,
 });
 
