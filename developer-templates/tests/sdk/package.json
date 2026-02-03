@@ -7,7 +7,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@decentralized-geo/astral-compute": "workspace:*"
+    "@decentralized-geo/astral-compute": "file:../../../packages/sdk-extensions"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

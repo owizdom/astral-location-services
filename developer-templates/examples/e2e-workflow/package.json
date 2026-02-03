@@ -8,7 +8,7 @@
     "test": "tsx run.ts"
   },
   "dependencies": {
-    "@decentralized-geo/astral-compute": "workspace:*",
+    "@decentralized-geo/astral-compute": "file:../../../packages/sdk-extensions",
     "ethers": "^6.0.0"
   },
   "devDependencies": {

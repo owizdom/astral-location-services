@@ -8,7 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@decentralized-geo/astral-compute": "workspace:*",
+    "@decentralized-geo/astral-compute": "file:../../../packages/sdk-extensions",
     "ethers": "^6.0.0",
     "next": "^14.0.0",
     "react": "^18.2.0",

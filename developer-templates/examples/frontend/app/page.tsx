@@ -9,6 +9,8 @@ const CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 84532);
 const SCHEMA_UID = process.env.NEXT_PUBLIC_RESOLVER_SCHEMA_UID ?? '';
 const ZERO_REF = '0x0000000000000000000000000000000000000000000000000000000000000000';
 
+type WindowWithEthereum = Window & { ethereum?: { request: (r: { method: string }) => Promise<string[]> } };
+
 function buildDelegatedAttestation(result: BooleanComputeResult): DelegatedAttestation {
   const att = result.attestation;
   const del = result.delegatedAttestation as { signature: string; attester: string; deadline: number; nonce?: number };
@@ -20,11 +22,11 @@ function buildDelegatedAttestation(result: BooleanComputeResult): DelegatedAttes
     message: {
       schema: att.schema,
       recipient: att.recipient,
-      expirationTime: 0n,
+      expirationTime: BigInt(0),
       revocable: true,
       refUID: ZERO_REF,
       data: att.data,
-      value: 0n,
+      value: BigInt(0),
       nonce: BigInt(del.nonce ?? 0),
       deadline: BigInt(del.deadline),
     },
@@ -40,7 +42,7 @@ export default function Home() {
   const [attestationUid, setAttestationUid] = useState<string | null>(null);
 
   async function connect() {
-    const w = (window as unknown as { ethereum?: { request: (r: { method: string }) => Promise<string[]> }).ethereum;
+    const w = typeof window !== 'undefined' ? (window as WindowWithEthereum).ethereum : undefined;
     if (!w) {
       setStatus('No wallet found');
       return;
@@ -73,7 +75,7 @@ export default function Home() {
 
       if (result.result && result.delegatedAttestation) {
         setStatus('Submitting attestation onchain...');
-        const provider = new BrowserProvider((window as unknown as { ethereum?: object }).ethereum!);
+        const provider = new BrowserProvider((window as WindowWithEthereum).ethereum!);
         const signer = await provider.getSigner();
         const eas = createAstralEAS(signer, CHAIN_ID);
         const delegated = buildDelegatedAttestation(result);
