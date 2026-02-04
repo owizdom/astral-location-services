@@ -18,7 +18,8 @@
 8. [API Design](#api-design)
 9. [EAS Schemas](#eas-schemas)
 10. [Security Considerations](#security-considerations)
-11. [Future Work](#future-work)
+11. [Open Questions](#open-questions)
+12. [Future Work](#future-work)
 
 ---
 
@@ -26,37 +27,33 @@
 
 ### What This Is
 
-The Astral Verification module provides **cryptographic verification of location proofs** from multiple sources. The module consists of:
+The Astral Verification module provides **evidence-based verification of location claims**. The module consists of:
 
-1. **Client SDK** — Collects location evidence on edge devices (mobile, server), builds signed location stamps, and bundles them into unverified location proofs
-2. **Verify Service** — TEE-hosted endpoint that analyzes location evidence and returns a credibility assessment
-3. **Integration** — Verify can be called independently or invoked prior to Compute operations
+1. **Client SDK** — Collects location evidence on devices (mobile, server, IoT), builds signed location stamps, and bundles them into location proofs
+2. **Verify Service** — TEE-hosted endpoint that evaluates evidence and returns a credibility assessment
+3. **Integration** — Verified location proofs can serve as trusted inputs to the Geospatial Compute module
 
 ### Core Value Proposition
 
-**Location stamps are evidence. Location claims are assertions. Verification quantifies how well evidence supports assertions.**
+**Location stamps are evidence. Location claims are assertions. Location proofs bundle evidence with claims. Verification evaluates how well evidence supports the claim.**
 
 | Component | Input | Output |
 |-----------|-------|--------|
-| Client SDK | Raw signals (GPS, network, sensors) | Signed location stamps |
-| Verify Service | Location claim + stamps | Verified Location Proof with credibility vector |
+| Client SDK | Raw signals (sensors, network, documents) | Signed location stamps |
+| Verify Service | Location proof (claim + stamps) | Credibility assessment |
 
-### Relationship to Existing Modules
+### Relationship to Geospatial Compute
 
-```
-astral.location.*  → Create/query location attestations (existing)
-astral.verify.*    → Verify location proofs (new)
-astral.compute.*   → Geospatial computations (existing)
-```
+Location Verification is **upstream** of Geospatial Compute:
 
-The Verify module is **distinct from Geospatial Operations**:
+| Location Verification | Geospatial Compute |
+|----------------------|-------------------|
+| Evaluates evidence credibility | Computes spatial relationships |
+| Input: location proof (claim + stamps) | Input: locations (claimed or verified) |
+| Output: credibility assessment | Output: policy attestation |
+| "How confident are we that X was at L?" | "Is A inside B?" |
 
-| Geospatial Operations | Location Verification |
-|----------------------|----------------------|
-| Computes spatial relationships | Assesses evidence credibility |
-| Input: geometries (claimed or attested) | Input: location claim + evidence |
-| Output: distance, area, contains, etc. | Output: credibility vector |
-| "Is A inside B?" | "How confident are we that X was at L?" |
+Location proofs that pass verification can serve as **verified inputs** to geospatial operations, increasing trust in the computed results.
 
 ---
 
@@ -65,39 +62,34 @@ The Verify module is **distinct from Geospatial Operations**:
 Drawing from [Towards Stronger Location Proofs](https://collective.flashbots.net/t/towards-stronger-location-proofs/5323), we adopt a **composable evidence model**:
 
 ```
-Raw Signals → Location Stamps → Evidence Bundles → Verified Location Proofs
+Raw Signals → Location Stamps → Location Proofs → Credibility Assessments
 ```
 
 ### Key Concepts
 
-**Location Claim** — An assertion that a subject was within a spatial region during a time interval:
-```
-C = (subject, spatial_region, temporal_range)
-```
+**Location Claim** — An assertion about the timing and location of an event. The event could be: a person's presence, a transaction's origin, an asset's location, a delivery, etc. Claims conform to the [Location Protocol](https://github.com/DecentralizedGeo/location-protocol-spec) specification.
 
-**Location Stamp** — Evidence from a single proof-of-location system (e.g., ProofMode, WitnessChain). Stamps are **independent of claims** — they provide evidence supporting a spatiotemporal assertion, which may come from direct observation (GPS, sensors) or indirect/derived sources (documents, records, inferences).
+**Location Stamp** — Evidence from a proof-of-location system that can corroborate a location claim. Stamps are **independent of claims** — they provide evidence about the timing and location of an event, which may come from:
+- **Direct observation**: Sensor data, network measurements, hardware attestation
+- **Indirect/derived sources**: Documents, records, institutional attestations
 
-**Verification** — The process of assessing whether stamps support a claim. Outputs a **credibility vector** quantifying confidence across multiple dimensions.
+**Location Proof** — A stamp (or collection of stamps) bundled with a location claim. This is the verifiable artifact submitted for evaluation.
+
+**Verification (Evidence Evaluation)** — The process of evaluating whether stamps support a claim. This is a **probabilistic assessment**, not a simple geometric intersection. The output is a **credibility assessment** quantifying confidence.
 
 ### Uncertainty Model
 
-Location proofs inherently involve uncertainty in both space and time:
+Location proofs inherently involve uncertainty in both space and time. Verification asks: *Given this evidence, what is the probability that the claimed event occurred within the claimed spatiotemporal bounds?*
 
-- **Spatial uncertainty**: Evidence indicates a region, not a point. GPS has ~5m error, network triangulation ~50-500m.
-- **Temporal uncertainty**: Evidence spans an interval, not an instant. Sensor readings take time to collect.
+The tradeoff: **larger bounds = higher confidence, lower precision**. A claim of "somewhere in California during 2024" is easier to verify with high confidence but less useful. A claim of "within 10m at 14:32:07" is precise but harder to verify confidently.
 
-Verification answers: *Does the evidence's spatiotemporal footprint overlap the claim's spatiotemporal region?*
+Applications decide what precision/confidence balance they need. Broader claims may be valuable for privacy preservation.
 
-```
-Claim:    [spatial_region] × [temporal_range]
-Evidence: [spatial_footprint] × [temporal_footprint]
-          ↓
-Verification: assess overlap, check signatures, evaluate consistency
-          ↓
-Output:   credibility vector
-```
+### Forgery Resistance Principle
 
-The tradeoff: **larger margins = higher confidence, lower precision**. Applications decide what precision/confidence balance they need.
+> **The cost of forging a location proof should exceed the economic value of the transaction it underpins.**
+
+This is application-specific. A proof for a $10 check-in reward needs less forgery resistance than a proof for a $10M land title transfer. The credibility assessment helps applications make this determination.
 
 ---
 
@@ -107,61 +99,141 @@ The tradeoff: **larger margins = higher confidence, lower precision**. Applicati
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                           CLIENT (Edge Device)                          │
-│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐ │
-│  │   Collect   │ → │ Create Stamp│ → │    Sign     │ → │   Bundle    │ │
-│  │  (signals)  │   │  (process)  │   │ (device key)│   │  (stamps)   │ │
-│  └─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘ │
-│        ↑                                                      │        │
-│   Plugin A (ProofMode)                                        │        │
-│   Plugin B (WitnessChain)                                     ↓        │
-│                                              ┌─────────────────────┐   │
-│                                              │ Unverified Location │   │
-│                                              │        Proof        │   │
-│                                              └──────────┬──────────┘   │
-└─────────────────────────────────────────────────────────┼──────────────┘
-                                                          │
-                                                          ↓
+│                              CLIENT DEVICE                              │
+│                                                                         │
+│  ┌───────────────────────────────────────────────────────────────────┐ │
+│  │                      ASTRAL SDK + PLUGIN                          │ │
+│  │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐             │ │
+│  │  │   Collect   │ → │   Create    │ → │    Sign     │             │ │
+│  │  │  (signals)  │   │  (stamp)    │   │ (device key)│             │ │
+│  │  └─────────────┘   └─────────────┘   └─────────────┘             │ │
+│  │        ↑                                     │                    │ │
+│  │   Plugin A (ProofMode)                       │                    │ │
+│  │   Plugin B (WitnessChain)                    │                    │ │
+│  │   Plugin C (future...)                       ↓                    │ │
+│  │                                    ┌─────────────────┐            │ │
+│  │                                    │ Location Stamp  │            │ │
+│  │                                    └────────┬────────┘            │ │
+│  └─────────────────────────────────────────────┼─────────────────────┘ │
+│                                                │                       │
+│                            ┌───────────────────┴───────────────────┐   │
+│                            │          Location Proof               │   │
+│                            │   (Location Claim + Stamp(s))         │   │
+│                            └───────────────────┬───────────────────┘   │
+└────────────────────────────────────────────────┼───────────────────────┘
+                                                 │
+                                                 ↓
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         ASTRAL TEE SERVICE                              │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                        VERIFY MODULE                             │   │
-│  │  ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐ │   │
-│  │  │ Per-Stamp    │ → │ Cross-       │ → │ Generate Credibility │ │   │
-│  │  │ Verification │   │ Correlation  │   │ Vector + Attestation │ │   │
-│  │  └──────────────┘   └──────────────┘   └──────────────────────┘ │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                                    │                                    │
-│                                    ↓                                    │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                       COMPUTE MODULE                             │   │
-│  │            (can optionally consume verified proofs)              │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
+│                           ASTRAL TEE SERVICE                            │
+│                                                                         │
+│  ┌───────────────────────────────────────────────────────────────────┐ │
+│  │                         VERIFY MODULE                             │ │
+│  │  ┌──────────────┐   ┌──────────────┐   ┌────────────────────────┐│ │
+│  │  │ Verify Each  │ → │ Assess vs    │ → │ Assess Cross-          ││ │
+│  │  │    Stamp     │   │    Claim     │   │ Correlation            ││ │
+│  │  └──────────────┘   └──────────────┘   └────────────────────────┘│ │
+│  │         │                                          │              │ │
+│  │         ↓                                          ↓              │ │
+│  │  ┌─────────────────────────────────────────────────────────────┐ │ │
+│  │  │              Credibility Assessment                         │ │ │
+│  │  └─────────────────────────────────────────────────────────────┘ │ │
+│  │                              │                                    │ │
+│  │                              ↓                                    │ │
+│  │  ┌─────────────────────────────────────────────────────────────┐ │ │
+│  │  │            Verified Location Proof (EAS)                    │ │ │
+│  │  └─────────────────────────────────────────────────────────────┘ │ │
+│  └───────────────────────────────────────────────────────────────────┘ │
+│                                                                         │
+│  ┌───────────────────────────────────────────────────────────────────┐ │
+│  │                     GEOSPATIAL COMPUTE MODULE                     │ │
+│  │            (consumes verified or unverified locations)            │ │
+│  │                              │                                    │ │
+│  │                              ↓                                    │ │
+│  │  ┌─────────────────────────────────────────────────────────────┐ │ │
+│  │  │                Policy Attestation (EAS)                     │ │ │
+│  │  └─────────────────────────────────────────────────────────────┘ │ │
+│  └───────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ↓
-                    ┌───────────────────────────────┐
-                    │   Verified Location Proof     │
-                    │   (EAS Attestation with       │
-                    │    credibility vector)        │
-                    └───────────────────────────────┘
+```
+
+```mermaid
+flowchart TB
+    subgraph Client["Client Device"]
+        subgraph SDK["Astral SDK + Plugin"]
+            Collect["Collect\n(signals)"] --> Create["Create\n(stamp)"]
+            Create --> Sign["Sign\n(device key)"]
+            Sign --> Stamp["Location Stamp"]
+        end
+        Stamp --> Proof["Location Proof\n(Claim + Stamps)"]
+    end
+
+    subgraph TEE["Astral TEE Service"]
+        subgraph Verify["Verify Module"]
+            VerifyStamp["Verify Each\nStamp"] --> AssessClaim["Assess vs\nClaim"]
+            AssessClaim --> CrossCorr["Assess Cross-\nCorrelation"]
+            CrossCorr --> Credibility["Credibility\nAssessment"]
+            Credibility --> VLP["Verified Location Proof\n(EAS Attestation)"]
+        end
+
+        subgraph Compute["Geospatial Compute Module"]
+            ComputeOp["Spatial Operations"] --> Policy["Policy Attestation\n(EAS Attestation)"]
+        end
+    end
+
+    Proof --> VerifyStamp
+    VLP -.->|"optional input"| ComputeOp
+
+    style SDK fill:#e1f5fe
+    style Verify fill:#f3e5f5
+    style Compute fill:#e8f5e9
+    style VLP fill:#fff3e0
+    style Policy fill:#fff3e0
 ```
 
 ### Key Architectural Decisions
 
-1. **Stamps are independent of claims** — A stamp is evidence, not an assertion. The relationship between stamp and claim is only evaluated during verification.
+1. **Proof = Claim + Stamp(s)** — A location proof bundles evidence (stamps) with an assertion (claim). This is the verifiable artifact.
 
-2. **Unified plugin interface** — One interface defines the full lifecycle (`collect`, `createStamp`, `sign`, `verify`). Implementations vary by environment, but the contract is consistent.
+2. **Three-phase verification** — (1) Verify each stamp independently, (2) Assess stamps against the claim, (3) Assess cross-correlation between stamps.
 
-3. **Verify each stamp independently, then cross-correlate** — Multi-stamp proofs run verification on each stamp first, then assess how they corroborate each other.
+3. **Unified plugin interface** — One interface defines the full lifecycle (`collect`, `create`, `sign`, `verify`). Implementations vary by environment, but the contract is consistent.
 
-4. **Attestation-centric output** — Verification results are EAS attestations, enabling composability with existing Astral infrastructure.
+4. **Distinct outputs** — Verify module outputs Verified Location Proofs. Compute module outputs Policy Attestations. These are different attestation types.
 
-5. **Separation from Compute** — Verify is independent; Compute can consume verified or unverified location inputs. Applications decide trust requirements.
+5. **Separation of concerns** — Verify is independent of Compute. Applications can use verification alone, or feed verified proofs into compute operations.
 
 ---
 
 ## Data Models
+
+### LocationClaim
+
+An assertion about the timing and location of an event. Conforms to [Location Protocol](https://github.com/DecentralizedGeo/location-protocol-spec) with additional fields.
+
+```typescript
+interface LocationClaim {
+  // Subject of the claim (who/what was at the location)
+  subject: SubjectIdentifier;
+
+  // Location data per Location Protocol spec
+  lp_version: string;           // "0.2"
+  location_type: string;        // "geojson-point", "h3-index", etc.
+  location: LocationData;       // Per Location Protocol
+  srs: string;                  // Spatial reference system URI
+
+  // Spatial uncertainty (optional, for point locations)
+  radius?: number;              // meters
+
+  // Temporal bounds
+  time: {
+    start: number;              // Unix timestamp (seconds)
+    end: number;                // Unix timestamp (seconds)
+  };
+
+  // What event is being claimed
+  event_type?: string;          // "presence", "transaction", "delivery", etc.
+}
+```
 
 ### SubjectIdentifier
 
@@ -176,34 +248,9 @@ interface SubjectIdentifier {
 
 For MVP: `scheme: "eth-address"` or `scheme: "device-pubkey"`.
 
-### LocationClaim
-
-An assertion that a subject was within a spatial region during a time interval.
-
-```typescript
-interface LocationClaim {
-  subject: SubjectIdentifier;
-
-  spatialRegion: {
-    center: [number, number];  // [longitude, latitude]
-    radius: number;            // meters
-  };
-
-  temporalRange: {
-    start: number;   // Unix timestamp (seconds)
-    end: number;     // Unix timestamp (seconds)
-  };
-}
-```
-
-**Design notes:**
-- Spatial region uses point + radius for simplicity. Future versions may support arbitrary polygons.
-- Both spatial and temporal dimensions are ranges, not points. You cannot prove presence at a point.
-- Coordinates follow GeoJSON convention: `[longitude, latitude]`.
-
 ### LocationStamp
 
-Evidence from a single proof-of-location system. Stamps are **independent of claims** and may represent direct observations (sensor data, network measurements) or indirect/derived evidence (document extraction, institutional records).
+Evidence from a proof-of-location system that can corroborate a location claim. Stamps are independent of claims.
 
 ```typescript
 interface LocationStamp {
@@ -212,8 +259,8 @@ interface LocationStamp {
   version: string;             // Plugin version (semver)
 
   // Spatiotemporal footprint of the evidence
-  spatialFootprint: GeoJSON.Geometry;  // Where evidence says the subject was
-  temporalFootprint: {
+  spatial_footprint: GeoJSON.Geometry;  // Where evidence indicates
+  temporal_footprint: {
     start: number;             // Unix timestamp (seconds)
     end: number;               // Unix timestamp (seconds)
   };
@@ -229,57 +276,62 @@ interface Signature {
   signer: SubjectIdentifier;
   algorithm: string;           // "secp256k1" | "ed25519" | ...
   value: string;               // Hex-encoded signature
+  timestamp: number;           // When signature was created
 }
 ```
 
 **Design notes:**
-- `spatialFootprint` is a GeoJSON geometry (polygon, circle approximation, etc.), not a point
-- `signals` contains raw plugin-specific data — may be direct observations (GPS readings, network latencies) or derived evidence (extracted document fields, institutional records)
-- Multiple signatures support multi-party evidence (e.g., challenger attestations, notarized documents)
+- `spatial_footprint` is a GeoJSON geometry (polygon, circle approximation, etc.), not a point
+- `signals` contains plugin-specific evidence data — may be sensor readings, network measurements, or document extractions
+- Multiple signatures support multi-party evidence (e.g., challenger attestations, institutional signatures)
 
-### UnverifiedLocationProof
+### LocationProof
 
-A bundle of stamps submitted for verification against a claim.
+A stamp (or collection of stamps) bundled with a location claim. This is the artifact submitted for verification.
 
 ```typescript
-interface UnverifiedLocationProof {
+interface LocationProof {
   claim: LocationClaim;
-  stamps: LocationStamp[];
+  stamps: LocationStamp[];     // One or more stamps
 }
 ```
 
-### CredibilityVector
+Single-stamp proofs are valid. Multi-stamp proofs enable cross-correlation analysis.
 
-The output of verification — a multidimensional assessment of evidence quality.
+### CredibilityAssessment
+
+The output of verification — a probabilistic assessment of how well evidence supports the claim.
 
 ```typescript
-interface CredibilityVector {
+interface CredibilityAssessment {
   // Overall confidence (0-1)
   confidence: number;
 
-  // Extensible dimensions (specific fields TBD based on learnings)
-  dimensions: Record<string, number>;
-
   // Per-stamp verification results
-  stampResults: StampVerificationResult[];
+  stamp_results: StampResult[];
 
   // Cross-correlation assessment (for multi-stamp proofs)
   correlation?: CorrelationAssessment;
+
+  // Extensible dimensions (specific fields TBD)
+  dimensions?: Record<string, number>;
 }
 
-interface StampVerificationResult {
-  stampIndex: number;
+interface StampResult {
+  stamp_index: number;
   plugin: string;
 
-  // Did the stamp's footprint overlap the claim?
-  spatialOverlap: boolean;
-  temporalOverlap: boolean;
+  // Stamp-level checks
+  signatures_valid: boolean;
+  structure_valid: boolean;
+  signals_consistent: boolean;
 
-  // Were signatures valid?
-  signaturesValid: boolean;
+  // Assessment against claim
+  supports_claim: boolean;
+  claim_support_score: number;  // 0-1
 
-  // Plugin-specific verification output
-  pluginResult: Record<string, unknown>;
+  // Plugin-specific output
+  plugin_result: Record<string, unknown>;
 }
 
 interface CorrelationAssessment {
@@ -287,40 +339,35 @@ interface CorrelationAssessment {
   independence: number;         // 0-1, higher = more independent
 
   // Do stamps corroborate each other?
-  corroboration: number;        // 0-1, higher = better agreement
+  agreement: number;            // 0-1, higher = better agreement
 
-  // Assessment notes
+  // Notes
   notes: string[];
 }
 ```
 
 **Design notes:**
-- The `dimensions` field is intentionally extensible. We will define specific dimensions (accuracy, forgery_cost, temporal_integrity, etc.) as we learn from implementation.
-- Per-stamp results enable applications to reason about individual evidence sources.
-- Correlation assessment captures the multi-factor proof value proposition.
+- Per-stamp results enable applications to reason about individual evidence sources
+- Multi-stamp proofs from independent systems increase confidence (but redundant stamps from the same system don't add confidence — they simply don't subtract)
+- The `dimensions` field is extensible for future confidence dimensions
 
 ### VerifiedLocationProof
 
-The final output — an EAS attestation with the credibility vector.
+The final output — an EAS attestation containing the proof and its credibility assessment.
 
 ```typescript
 interface VerifiedLocationProof {
-  // The original claim
-  claim: LocationClaim;
+  // The original proof
+  proof: LocationProof;
 
   // Verification result
-  credibility: CredibilityVector;
-
-  // References to evidence (stamps may be stored separately)
-  evidenceRefs: string[];       // UIDs or URIs
+  credibility: CredibilityAssessment;
 
   // Attestation metadata
-  attestation: {
-    uid: string;
-    attester: string;           // Astral service key
-    timestamp: number;
-    chainId: number;
-  };
+  uid: string;
+  attester: string;             // Astral service address
+  timestamp: number;
+  chain_id?: number;            // If submitted onchain
 }
 ```
 
@@ -350,7 +397,7 @@ interface LocationProofPlugin {
    * Process raw signals into an unsigned stamp.
    * Determines spatial/temporal footprint from signals.
    */
-  createStamp(signals: RawSignals): Promise<UnsignedStamp>;
+  create(signals: RawSignals): Promise<UnsignedStamp>;
 
   /**
    * Sign the stamp with device/node key.
@@ -360,33 +407,16 @@ interface LocationProofPlugin {
   // === Verification Phase (server-side) ===
 
   /**
-   * Verify a stamp against a claim.
-   * Checks signatures, validates signals, assesses overlap.
+   * Verify a stamp's internal validity.
+   * Checks signatures, structure, signal consistency.
    */
-  verify(
-    claim: LocationClaim,
-    stamp: LocationStamp,
-    options?: VerifyOptions
-  ): Promise<StampVerificationResult>;
-}
+  verify(stamp: LocationStamp): Promise<StampVerificationResult>;
 
-interface CollectOptions {
-  timeout?: number;             // Max collection time (ms)
-  minSignals?: number;          // Minimum signal count
-}
-
-interface VerifyOptions {
-  strictMode?: boolean;         // Fail on any invalid signal
-}
-
-type RawSignals = Record<string, unknown>;
-
-interface UnsignedStamp {
-  plugin: string;
-  version: string;
-  spatialFootprint: GeoJSON.Geometry;
-  temporalFootprint: { start: number; end: number };
-  signals: Record<string, unknown>;
+  /**
+   * Assess how well a stamp supports a claim.
+   * Probabilistic evaluation, not geometric intersection.
+   */
+  assess(stamp: LocationStamp, claim: LocationClaim): Promise<ClaimAssessment>;
 }
 ```
 
@@ -396,10 +426,11 @@ The plugin interface is environment-agnostic. In practice:
 
 | Method | Mobile (ProofMode) | Server (WitnessChain) |
 |--------|-------------------|----------------------|
-| `collect()` | GPS, sensors, Secure Enclave | UDP ping, challenger network |
-| `createStamp()` | Fuse sensor data → region | Aggregate latencies → region |
+| `collect()` | Hardware attestation, sensors | UDP ping, challenger network |
+| `create()` | Fuse attestation data → region | Aggregate latencies → region |
 | `sign()` | Device key (TEE-backed) | Node key, challenger sigs |
 | `verify()` | Runs on TEE | Runs on TEE |
+| `assess()` | Runs on TEE | Runs on TEE |
 
 Collection methods may throw "not supported" in environments where they don't apply. Verification always runs server-side (TEE).
 
@@ -408,14 +439,16 @@ Collection methods may throw "not supported" in environments where they don't ap
 **ProofMode** (priority)
 - Type: Device attestation + sensor fusion
 - Environment: Mobile (React Native / native)
-- Evidence: GPS, accelerometer, gyroscope, hardware attestation
+- Evidence: Hardware attestation (Secure Enclave/TEE), sensor fusion
 - Trust model: Device integrity, tamper-evident packaging
 
 **WitnessChain** (secondary)
 - Type: Infrastructure location proof
 - Environment: Server/node
 - Evidence: UDP ping latencies from challenger network
-- Trust model: Physical network constraints, cryptoeconomic security
+- Trust model: Physical network constraints (speed of light), cryptoeconomic security
+
+Each plugin must document its own threat model and trust assumptions (see [Security Considerations](#security-considerations)).
 
 ---
 
@@ -424,32 +457,38 @@ Collection methods may throw "not supported" in environments where they don't ap
 ### Single-Stamp Verification
 
 ```
-1. Receive: LocationClaim + LocationStamp
+1. Receive: LocationProof (claim + single stamp)
 2. Load plugin for stamp.plugin
-3. Call plugin.verify(claim, stamp)
-   a. Validate signatures
-   b. Check signal consistency
-   c. Compute spatial overlap (stamp.spatialFootprint ∩ claim.spatialRegion)
-   d. Compute temporal overlap (stamp.temporalFootprint ∩ claim.temporalRange)
-4. Return StampVerificationResult
+3. Verify stamp internally:
+   a. plugin.verify(stamp)
+   b. Check signatures valid
+   c. Check structure valid
+   d. Check signals internally consistent
+4. Assess stamp against claim:
+   a. plugin.assess(stamp, claim)
+   b. Probabilistic evaluation of support
+5. Generate CredibilityAssessment
+6. Create VerifiedLocationProof attestation
+7. Return VerifiedLocationProof
 ```
 
 ### Multi-Stamp Verification
 
 ```
-1. Receive: UnverifiedLocationProof (claim + stamps[])
+1. Receive: LocationProof (claim + multiple stamps)
 2. For each stamp (in parallel):
-   a. Run single-stamp verification
-   b. Collect StampVerificationResult
+   a. Verify stamp internally
+   b. Assess stamp against claim
+   c. Collect StampResult
 3. Cross-correlation analysis:
-   a. Assess independence: Are stamps from uncorrelated systems?
-   b. Assess corroboration: Do spatial/temporal footprints agree?
-   c. Penalize redundancy: Multiple stamps from same system add little
-4. Aggregate into CredibilityVector:
+   a. Assess independence: Are stamps from different systems?
+   b. Assess agreement: Do spatial/temporal footprints align?
+   c. Note: Redundant stamps (same system) don't add confidence, but don't subtract either
+4. Aggregate into CredibilityAssessment:
    a. Combine per-stamp results
-   b. Weight by independence and corroboration
+   b. Weight by independence and agreement
    c. Compute overall confidence
-5. Generate VerifiedLocationProof attestation
+5. Create VerifiedLocationProof attestation
 6. Return VerifiedLocationProof
 ```
 
@@ -457,15 +496,14 @@ Collection methods may throw "not supported" in environments where they don't ap
 
 ```
 confidence = f(
-  stamp_validity[],      // Did each stamp pass verification?
-  spatial_overlaps[],    // How well do footprints match claim?
-  temporal_overlaps[],   // How well do intervals match claim?
-  independence,          // Are evidence sources uncorrelated?
-  corroboration          // Do sources agree with each other?
+  stamp_validity[],        // Did each stamp pass internal verification?
+  claim_support_scores[],  // How well does each stamp support the claim?
+  independence,            // Are evidence sources uncorrelated?
+  agreement                // Do sources agree with each other?
 )
 ```
 
-The exact formula will be refined through implementation. Key principle: **independent, corroborating evidence is worth more than redundant evidence**.
+Key principle: **Independent, corroborating evidence increases confidence. Redundant evidence from the same system neither adds nor subtracts.**
 
 ---
 
@@ -474,22 +512,23 @@ The exact formula will be refined through implementation. Key principle: **indep
 ### Namespace
 
 ```typescript
-// Verification operations
-astral.verify.stamp(claim, stamp)           // Verify single stamp
-astral.verify.proof(proof)                  // Verify multi-stamp proof
-astral.verify.createClaim(params)           // Helper to construct claims
-
 // Stamp collection (client SDK)
-astral.stamps.collect(plugin, options)      // Collect signals
-astral.stamps.create(plugin, signals)       // Create unsigned stamp
-astral.stamps.sign(stamp, signer)           // Sign stamp
-astral.stamps.bundle(stamps)                // Bundle into proof
+astral.stamps.collect(plugin, options)    // Collect signals
+astral.stamps.create(plugin, signals)     // Create unsigned stamp
+astral.stamps.sign(stamp, signer)         // Sign stamp
+
+// Proof construction
+astral.proofs.create(claim, stamps)       // Bundle claim + stamps
+
+// Verification operations
+astral.verify.stamp(stamp)                // Verify stamp internally (no claim)
+astral.verify.proof(proof)                // Full verification against claim
 ```
 
 ### Example Usage
 
 ```typescript
-import { astral } from '@astral/sdk';
+import { astral } from 'astral-sdk';  // TODO: confirm package name
 
 // === Client Side: Collect Evidence ===
 
@@ -500,41 +539,50 @@ const signals = await astral.stamps.collect('proofmode', {
 
 // Create and sign stamp
 const unsigned = await astral.stamps.create('proofmode', signals);
-const stamp = await astral.stamps.sign(unsigned, deviceSigner);
+const stamp = await astral.stamps.sign(unsigned, device_signer);
+
+// === Create Location Proof ===
+
+// Define the claim (Location Protocol format)
+const claim = {
+  subject: { scheme: 'eth-address', value: '0x...' },
+  lp_version: '0.2',
+  location_type: 'geojson-point',
+  location: { type: 'Point', coordinates: [-122.4194, 37.7749] },
+  srs: 'http://www.opengis.net/def/crs/OGC/1.3/CRS84',
+  radius: 100,  // 100 meter uncertainty
+  time: { start: Date.now() / 1000 - 60, end: Date.now() / 1000 },
+  event_type: 'presence'
+};
+
+// Bundle into proof
+const proof = astral.proofs.create(claim, [stamp]);
 
 // === Submit for Verification ===
 
-// Create a claim
-const claim = astral.verify.createClaim({
-  subject: { scheme: 'eth-address', value: '0x...' },
-  location: { center: [-122.4194, 37.7749], radius: 100 },
-  time: { start: Date.now() - 60000, end: Date.now() }
-});
-
-// Verify
-const result = await astral.verify.stamp(claim, stamp);
+const result = await astral.verify.proof(proof);
 
 console.log(result.credibility.confidence);  // 0.85
-console.log(result.attestation.uid);         // 0xabc123...
+console.log(result.uid);                     // 0xabc123...
 ```
 
 ### Multi-Stamp Example
 
 ```typescript
 // Collect from multiple plugins
-const proofmodeStamp = await collectAndSign('proofmode');
-const witnessStamp = await collectAndSign('witnesschain');
+const proofmode_stamp = await collect_and_sign('proofmode');
+const witness_stamp = await collect_and_sign('witnesschain');
 
-// Bundle into proof
-const proof = astral.stamps.bundle([proofmodeStamp, witnessStamp]);
-proof.claim = claim;
+// Bundle into proof with multiple stamps
+const proof = astral.proofs.create(claim, [proofmode_stamp, witness_stamp]);
 
 // Verify multi-stamp proof
 const result = await astral.verify.proof(proof);
 
-console.log(result.credibility.correlation.independence);   // 0.9 (different systems)
-console.log(result.credibility.correlation.corroboration);  // 0.8 (they agree)
-console.log(result.credibility.confidence);                 // Higher than single-stamp
+// Access cross-correlation analysis
+console.log(result.credibility.correlation.independence);  // 0.95 (different systems)
+console.log(result.credibility.correlation.agreement);     // 0.88 (they agree)
+console.log(result.credibility.confidence);                // Higher than single-stamp
 ```
 
 ---
@@ -545,47 +593,45 @@ console.log(result.credibility.confidence);                 // Higher than singl
 
 **POST /verify/stamp**
 
-Verify a single stamp against a claim.
+Verify a stamp's internal validity (no claim assessment).
 
 ```typescript
 // Request
 {
-  claim: LocationClaim,
-  stamp: LocationStamp,
-  options?: {
-    chainId: number,         // For attestation signing
-    submitOnchain?: boolean  // Default: false
-  }
+  stamp: LocationStamp
 }
 
 // Response
 {
-  result: StampVerificationResult,
-  credibility: CredibilityVector,
-  attestation: {
-    uid: string,
-    delegatedAttestation?: DelegatedAttestation
-  }
+  valid: boolean,
+  signatures_valid: boolean,
+  structure_valid: boolean,
+  signals_consistent: boolean,
+  plugin_result: Record<string, unknown>
 }
 ```
 
 **POST /verify/proof**
 
-Verify a multi-stamp proof.
+Full verification of a location proof against its claim.
 
 ```typescript
 // Request
 {
-  proof: UnverifiedLocationProof,
+  proof: LocationProof,
   options?: {
-    chainId: number,
-    submitOnchain?: boolean
+    chain_id?: number,         // For attestation signing
+    submit_onchain?: boolean   // Default: false
   }
 }
 
 // Response
 {
-  result: VerifiedLocationProof
+  uid: string,
+  credibility: CredibilityAssessment,
+  proof: LocationProof,
+  attester: string,
+  timestamp: number
 }
 ```
 
@@ -597,8 +643,18 @@ List available verification plugins.
 // Response
 {
   plugins: [
-    { name: 'proofmode', version: '0.1.0', environments: ['mobile'] },
-    { name: 'witnesschain', version: '0.1.0', environments: ['server'] }
+    {
+      name: 'proofmode',
+      version: '0.1.0',
+      environments: ['mobile'],
+      description: 'Device-based location attestation with hardware attestation'
+    },
+    {
+      name: 'witnesschain',
+      version: '0.1.0',
+      environments: ['server'],
+      description: 'Infrastructure-based verification via challenger network'
+    }
   ]
 }
 ```
@@ -607,25 +663,25 @@ List available verification plugins.
 
 ## EAS Schemas
 
-### VerifiedLocationProofAttestation
+### VerifiedLocationProof
 
-Minimal onchain footprint with references to full data.
+EAS attestation for verified location proofs. Can be onchain or offchain.
 
 ```solidity
 // Schema fields
-bytes32 claimHash          // Hash of the LocationClaim
-uint8 confidence           // 0-100 (scaled from 0-1)
-bytes32 evidenceRoot       // Merkle root of stamp hashes
-bytes credibilityVector    // Encoded CredibilityVector (or IPFS CID)
+bytes32 claim_hash             // Hash of the LocationClaim
+bytes32 proof_hash             // Hash of the full LocationProof
+uint8 confidence               // 0-100 (scaled from 0-1)
+string credibility_uri         // URI to full CredibilityAssessment (IPFS, etc.)
 ```
 
 **Design notes:**
-- `claimHash` enables verification without storing full claim onchain
-- `confidence` is the headline number for simple onchain checks
-- `evidenceRoot` enables proving specific stamps were included
-- `credibilityVector` can be embedded or referenced (cost tradeoff)
+- Offchain attestations are valid — no requirement to submit onchain
+- `claim_hash` and `proof_hash` enable verification without storing full data onchain
+- `confidence` is the headline number for simple checks
+- Full credibility assessment stored offchain, referenced by URI
 
-### Integration with Existing Schemas
+### Integration with Policy Attestations
 
 Verified Location Proofs can be **referenced** by Policy Attestations when location inputs have been verified:
 
@@ -634,8 +690,8 @@ Verified Location Proofs can be **referenced** by Policy Attestations when locat
 {
   operation: 'contains',
   inputs: [
-    { type: 'verified-location', uid: '0x...' },  // VerifiedLocationProof
-    { type: 'location', uid: '0x...' }            // Standard location attestation
+    { type: 'verified-location', ref_uid: '0x...' },  // VerifiedLocationProof
+    { type: 'location', uid: '0x...' }                 // Standard location
   ],
   result: true
 }
@@ -645,30 +701,85 @@ Verified Location Proofs can be **referenced** by Policy Attestations when locat
 
 ## Security Considerations
 
-### Threat Model
+### Forgery Resistance Principle
+
+> **The cost of forging a location proof should exceed the economic value of the transaction it underpins.**
+
+Application developers must assess whether the credibility level meets their security requirements for the value at stake.
+
+### Plugin Threat Model Template
+
+Each plugin MUST document:
+
+1. **Evidence type**: What signals does this plugin collect?
+2. **Trust assumptions**: What must be true for the evidence to be trustworthy?
+3. **Attack vectors**: How could an adversary forge this evidence?
+4. **Forgery cost**: What resources would forgery require?
+5. **Mitigations**: How does the plugin resist these attacks?
+
+#### Example: ProofMode (Draft)
+
+| Aspect | Description |
+|--------|-------------|
+| Evidence type | Hardware attestation, device sensors |
+| Trust assumptions | Device TEE/Secure Enclave not compromised |
+| Attack vectors | Device rooting, TEE exploitation, emulation |
+| Forgery cost | Requires compromised device or TEE exploit |
+| Mitigations | Hardware attestation, SafetyNet/DeviceCheck |
+
+#### Example: WitnessChain (Draft)
+
+| Aspect | Description |
+|--------|-------------|
+| Evidence type | UDP ping latencies from challenger network |
+| Trust assumptions | Speed of light constraints; majority challengers honest |
+| Attack vectors | Challenger collusion, network manipulation |
+| Forgery cost | Cryptoeconomic (must corrupt staked challengers) |
+| Mitigations | EigenLayer restaking, distributed challenger set |
+
+### General Threat Model
 
 | Threat | Mitigation |
 |--------|------------|
-| GPS spoofing | Multi-factor evidence, sensor fusion |
-| Replay attacks | Temporal bounds, nonces in stamps |
+| Replay attacks | **[NEEDS DESIGN]** — See Open Questions |
 | Signature forgery | Standard cryptographic verification |
 | Collusion | Economic disincentives, independent systems |
 | TEE compromise | Defense in depth, multiple attestation sources |
 
-### Trust Assumptions
+---
 
-1. **Device integrity** (ProofMode): Assumes device TEE/Secure Enclave is not compromised
-2. **Network physics** (WitnessChain): Assumes speed-of-light constraints hold
-3. **Challenger honesty** (WitnessChain): Assumes majority of challengers are honest (cryptoeconomic)
-4. **TEE integrity**: Assumes EigenCompute TEE execution is trustworthy
+## Open Questions
 
-### Forgery Resistance Principle
+### Replay Protection
 
-Per the Flashbots framework:
+**Problem:** How do we prevent replay of valid stamps?
 
-> "The anticipated cost of faking all contributing signals should outweigh potential gains."
+If stamps aren't published to a public registry, we can't check for duplicates. Options to explore:
 
-Multi-factor proofs with independent, uncorrelated evidence sources raise the forgery cost. Application developers should assess whether the credibility level meets their security requirements.
+1. **Temporal bounds**: Stamps expire after a short window
+2. **Challenge-response**: Verifier provides nonce that must be included in stamp
+3. **Stamp registry**: Publish stamp hashes to detect reuse
+4. **Application-level**: Let applications track stamp usage
+
+**Status:** Needs design work.
+
+### Stamp/Claim/Proof as Attestations
+
+**Question:** Should stamps and claims be EAS attestations themselves, or just data structures?
+
+Current design: Only the final VerifiedLocationProof is an attestation. Stamps and claims are data structures within it.
+
+**Trade-offs:**
+- Attestations for everything: More composable, but more complexity and gas
+- Current approach: Simpler, stamps are ephemeral evidence
+
+**Status:** Current design seems reasonable for MVP. Revisit if composability needs arise.
+
+### TEE Remote Attestation
+
+**Question:** How does EigenCompute handle TEE remote attestations? Should we bundle them with verification output?
+
+**Status:** Dependent on Eigen implementation. Deferred.
 
 ---
 
@@ -677,16 +788,15 @@ Multi-factor proofs with independent, uncorrelated evidence sources raise the fo
 ### Deferred for v1+
 
 1. **TEE Remote Attestation** — Bundle EigenCompute remote attestation with verification output
-2. **Additional Plugins** — Beacon networks, satellite attestation, peer witness
+2. **Additional Plugins** — Beacon networks, Galileo signed signals, peer witness, document verification
 3. **Confidence Calibration** — Empirical tuning of confidence calculations
 4. **Onchain Verification** — Solidity verifier for credibility proofs
 5. **Privacy Preservation** — Zero-knowledge proofs for location without revealing exact position
 
-### Open Research Questions
+### Plugin Development Tasks
 
-1. **Credibility vector dimensions** — What specific dimensions should we track?
-2. **Cross-system correlation** — How to formally model independence between proof systems?
-3. **Forgery cost quantification** — Can we rigorously estimate cost to fake evidence?
+1. **ProofMode Plugin** — Full implementation with documented threat model
+2. **WitnessChain Plugin** — Integration research, challenger network interface
 
 ---
 
