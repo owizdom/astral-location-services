@@ -1,6 +1,6 @@
 [build]
-dockerfilePath = "packages/compute-service/Dockerfile.staging"
-watchPatterns = ["packages/compute-service/**", "package.json", "package-lock.json"]
+dockerfilePath = "packages/astral-service/Dockerfile.staging"
+watchPatterns = ["packages/astral-service/**", "package.json", "package-lock.json"]
 
 [deploy]
 healthcheckPath = "/health"
