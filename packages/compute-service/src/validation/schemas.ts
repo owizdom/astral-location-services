@@ -53,7 +53,7 @@ const MultiPolygonSchema = z.object({
 });
 
 // GeometryCollection requires lazy evaluation for recursion
-type GeometryCollectionType = {
+export type GeometryCollectionType = {
   type: 'GeometryCollection';
   geometries: Array<z.infer<typeof BaseGeometrySchema> | GeometryCollectionType>;
 };

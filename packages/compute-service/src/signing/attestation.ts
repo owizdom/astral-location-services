@@ -1,7 +1,8 @@
 import { SchemaEncoder } from '@ethereum-attestation-service/eas-sdk';
 import { Wallet, HDNodeWallet, JsonRpcProvider, Contract } from 'ethers';
 import type { SigningResult, NumericPolicyAttestationData, BooleanPolicyAttestationData } from '../types/index.js';
-import { NUMERIC_POLICY_SCHEMA, BOOLEAN_POLICY_SCHEMA } from './schemas.js';
+import type { VerifyAttestationData } from '../types/verify.js';
+import { NUMERIC_POLICY_SCHEMA, BOOLEAN_POLICY_SCHEMA, VERIFY_SCHEMA } from './schemas.js';
 
 // RPC URLs for nonce sync
 const RPC_URLS: Record<number, string> = {
@@ -154,6 +155,29 @@ export async function signBooleanAttestation(
     { name: 'inputRefs', value: data.inputRefs, type: 'bytes32[]' },
     { name: 'timestamp', value: data.timestamp, type: 'uint256' },
     { name: 'operation', value: data.operation, type: 'string' },
+  ]);
+
+  return signDelegatedAttestation(encodedData, schemaUid, recipient);
+}
+
+/**
+ * Sign a verify attestation (for verified location proofs).
+ */
+export async function signVerifyAttestation(
+  data: VerifyAttestationData,
+  schemaUid: string,
+  recipient: string
+): Promise<SigningResult> {
+  if (!signer) {
+    throw new Error('Signer not initialized');
+  }
+
+  const encoder = getEncoder(VERIFY_SCHEMA);
+  const encodedData = encoder.encodeData([
+    { name: 'claim_hash', value: data.claimHash, type: 'bytes32' },
+    { name: 'proof_hash', value: data.proofHash, type: 'bytes32' },
+    { name: 'confidence', value: data.confidence, type: 'uint8' },
+    { name: 'credibility_uri', value: data.credibilityUri, type: 'string' },
   ]);
 
   return signDelegatedAttestation(encodedData, schemaUid, recipient);

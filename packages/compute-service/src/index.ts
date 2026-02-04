@@ -5,6 +5,8 @@ import { checkConnection } from './db/pool.js';
 import { initSigner, initSignerFromMnemonic, getSignerAddress, syncNonceFromEAS } from './signing/attestation.js';
 import { initSchemaConfig } from './config/schemas.js';
 import computeRoutes from './routes/index.js';
+import verifyRoutes from './routes/verify/index.js';
+import { initPluginRegistry } from './verify/index.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { rateLimiter } from './middleware/rate-limit.js';
 
@@ -47,12 +49,18 @@ app.get('/', (_req, res) => {
       '/compute/v0/contains': 'POST - Check if geometry A contains geometry B',
       '/compute/v0/within': 'POST - Check if point is within radius of target',
       '/compute/v0/intersects': 'POST - Check if two geometries intersect',
+      '/verify/v0/stamp': 'POST - Verify a location stamp\'s internal validity',
+      '/verify/v0/proof': 'POST - Verify a location proof and return credibility assessment',
+      '/verify/v0/plugins': 'GET - List available verification plugins',
     },
   });
 });
 
 // Compute routes
 app.use('/compute/v0', computeRoutes);
+
+// Verify routes
+app.use('/verify/v0', verifyRoutes);
 
 // Error handler (must be last)
 app.use(errorHandler);
@@ -82,6 +90,9 @@ async function start() {
 
   // Initialize default schema UIDs for the configured chain
   initSchemaConfig(chainId);
+
+  // Initialize verification plugin registry
+  initPluginRegistry();
 
   // Check database connection
   const dbConnected = await checkConnection();

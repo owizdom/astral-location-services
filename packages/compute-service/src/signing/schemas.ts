@@ -13,6 +13,11 @@ export const NUMERIC_POLICY_SCHEMA =
 export const BOOLEAN_POLICY_SCHEMA =
   'bool result, bytes32[] inputRefs, uint256 timestamp, string operation';
 
+// Verify attestation schema (for verified location proofs)
+// Uses snake_case to conform with Location Protocol v0.2
+export const VERIFY_SCHEMA =
+  'bytes32 claim_hash, bytes32 proof_hash, uint8 confidence, string credibility_uri';
+
 // Unit strings for numeric attestations
 export const UNITS = {
   CENTIMETERS: 'centimeters',

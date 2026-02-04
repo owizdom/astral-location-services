@@ -249,3 +249,33 @@ export function isOnchainInput(input: Input): input is OnchainInput {
 export function isOffchainInput(input: Input): input is OffchainInput {
   return typeof input === 'object' && 'uid' in input && 'uri' in input;
 }
+
+// Re-export verify types
+export type {
+  SubjectIdentifier,
+  LPGeometry,
+  LPGeometryType,
+  LocationData,
+  TimeBounds,
+  LocationClaim,
+  Signature,
+  LocationStamp,
+  LocationProof,
+  StampResult,
+  CorrelationAssessment,
+  CredibilityAssessment,
+  StampVerificationResult,
+  VerifyStampRequest,
+  VerifyStampResponse,
+  VerifyProofOptions,
+  VerifyProofRequest,
+  VerifyProofResponse,
+  PluginInfo,
+  PluginsListResponse,
+  VerifyAttestationData,
+} from './verify.js';
+
+export {
+  isGeoJSONGeometry,
+  isMultiStampProof,
+} from './verify.js';

@@ -1,11 +1,10 @@
 /**
- * Test server factory for integration tests.
- * Creates an Express app without starting the HTTP server.
+ * Test server factory for verify module integration tests.
+ * Creates an Express app with only verify routes (no database dependency).
  */
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import computeRoutes from '../../src/routes/index.js';
 import verifyRoutes from '../../src/routes/verify/index.js';
 import { errorHandler } from '../../src/middleware/error-handler.js';
 import { initSigner } from '../../src/signing/attestation.js';
@@ -20,15 +19,14 @@ import { initPluginRegistry } from '../../src/verify/index.js';
  * Address: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
  *
  * WARNING: This key is publicly known. Never use with real funds.
- * See: https://hardhat.org/hardhat-network/docs/reference#initial-state
  */
 const TEST_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
 /**
- * Create a test Express app with all routes mounted.
- * Does NOT start listening - use with supertest.
+ * Create a test Express app with only verify routes mounted.
+ * Does NOT require database - use for verify module tests.
  */
-export function createTestApp() {
+export function createVerifyTestApp() {
   const app = express();
 
   // Initialize signer with test key
@@ -41,9 +39,6 @@ export function createTestApp() {
   app.use(helmet());
   app.use(cors());
   app.use(express.json({ limit: '1mb' }));
-
-  // Mount routes at /compute/v0
-  app.use('/compute/v0', computeRoutes);
 
   // Mount verify routes at /verify/v0
   app.use('/verify/v0', verifyRoutes);
