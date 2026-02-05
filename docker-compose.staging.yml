@@ -1,6 +1,8 @@
 services:
   app:
-    image: ghcr.io/astral-global/astral-location-services:latest
+    image: ghcr.io/astralprotocol/astral-location-services:latest
+    ports:
+      - "3001:3000"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://astral:${POSTGRES_PASSWORD:-astral}@db:5432/astral
@@ -34,21 +36,5 @@ services:
       retries: 5
     restart: unless-stopped
 
-  caddy:
-    image: caddy:2-alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      app:
-        condition: service_healthy
-    restart: unless-stopped
-
 volumes:
   pgdata:
-  caddy_data:
-  caddy_config:

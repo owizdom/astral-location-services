@@ -71,8 +71,7 @@ jobs:
             # Pull latest compose and config
             git pull origin main
 
-            # Log in to GHCR and pull new image
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            # Pull new image from GHCR (public repo, no auth needed)
             docker compose -f docker-compose.staging.yml pull app
 
             # Restart with new image
@@ -80,7 +79,7 @@ jobs:
 
             # Wait and verify health
             sleep 10
-            curl -f http://localhost:3000/health || exit 1
+            curl -f http://localhost:3001/health || exit 1
 
             # Clean up old images
             docker image prune -f
