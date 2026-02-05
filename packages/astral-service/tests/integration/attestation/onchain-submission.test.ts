@@ -55,7 +55,7 @@ function computeSchemaUid(schema: string, resolver: string, revocable: boolean):
 }
 
 // Our attestation schemas
-import { NUMERIC_POLICY_SCHEMA } from '../../../src/signing/schemas.js';
+import { NUMERIC_POLICY_SCHEMA } from '../../../src/core/signing/schemas.js';
 
 const app = createTestApp();
 
